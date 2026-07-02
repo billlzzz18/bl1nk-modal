@@ -1,0 +1,8 @@
+{
+  "track_id": "rust_engine_20260421",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-04-21T00:00:00Z",
+  "updated_at": "2026-04-21T00:00:00Z",
+  "description": "Rust Core Engine Integration for OpenCode Gateway"
+}
