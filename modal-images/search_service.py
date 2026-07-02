@@ -12,6 +12,20 @@ from transformers import AutoTokenizer, AutoModel
 
 app = FastAPI(title="bl1nk-search")
 
+API_TOKEN = os.getenv("BL1NK_API_TOKEN", "")
+API_TOKEN_ID = os.getenv("BL1NK_TOKEN_ID", "default-token")
+
+
+def assert_token(authorization: Optional[str]):
+    if not API_TOKEN:
+        return
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    token = authorization.split(" ", 1)[1]
+    if token != API_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+
 # Models
 EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
@@ -142,6 +156,11 @@ class UpdateResult(BaseModel):
     error: Optional[Error] = None
 
 
+class AuthVerifyResponse(BaseModel):
+    ok: bool
+    token_id: str
+
+
 @app.get("/health")
 def health():
     services = {
@@ -158,8 +177,21 @@ def health():
     }
 
 
+@app.get("/auth/verify", response_model=AuthVerifyResponse)
+def auth_verify(authorization: Optional[str] = Header(None)):
+    if not API_TOKEN:
+        return AuthVerifyResponse(ok=True, token_id=API_TOKEN_ID)
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    token = authorization.split(" ", 1)[1]
+    if token != API_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
+    return AuthVerifyResponse(ok=True, token_id=API_TOKEN_ID)
+
+
 @app.post("/index", response_model=IndexResult)
-def index(payload: IndexPayload):
+def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
+    assert_token(authorization)
     tid = str(uuid.uuid4())
     try:
         get_models()
@@ -184,7 +216,8 @@ def index(payload: IndexPayload):
 
 
 @app.post("/query", response_model=QueryResult)
-def query(request: dict):
+def query(request: dict, authorization: Optional[str] = Header(None)):
+    assert_token(authorization)
     tid = str(uuid.uuid4())
     start = time.time()
     q = request.get("query", "")
@@ -198,7 +231,6 @@ def query(request: dict):
         scores, idxs = _index.search(q_vec, top_k * 2)
         hits = []
         texts = []
-        ids = []
         for i, idx in enumerate(idxs[0]):
             if idx < 0 or idx >= len(_ids):
                 continue
@@ -208,7 +240,6 @@ def query(request: dict):
                 continue
             hits.append({"id": doc_id, "score": float(scores[0][i]), "content": meta.get("content", "")})
             texts.append(meta.get("content", ""))
-            ids.append(doc_id)
             if len(hits) >= top_k:
                 break
         if texts:
@@ -223,7 +254,8 @@ def query(request: dict):
 
 
 @app.post("/delete", response_model=DeleteResult)
-def delete(request: dict):
+def delete(request: dict, authorization: Optional[str] = Header(None)):
+    assert_token(authorization)
     tid = str(uuid.uuid4())
     doc_id = request.get("id")
     source_type = request.get("source_type")
@@ -235,7 +267,8 @@ def delete(request: dict):
 
 
 @app.post("/update", response_model=UpdateResult)
-def update(request: UpdateRequest):
+def update(request: UpdateRequest, authorization: Optional[str] = Header(None)):
+    assert_token(authorization)
     tid = str(uuid.uuid4())
     try:
         if request.id not in _metadata:
