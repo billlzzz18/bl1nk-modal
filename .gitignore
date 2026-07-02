@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+node_modules/
+target/
+dist/
+build/
+*.log
+
+# subrepos/folders
+modal-opencode/

@@ -1,0 +1,16 @@
+[project]
+name = "image-builds"
+version = "1.0.0"
+description = "Modal image builds for Rust development environment"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "modal>=0.70.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["build_bl1nk_rust"]

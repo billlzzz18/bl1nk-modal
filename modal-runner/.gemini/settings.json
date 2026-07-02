@@ -1,0 +1,17 @@
+{
+  "tools": {
+    "sandbox": "docker"
+  },
+  "mcpServers": {
+    "omp_cli_tools": {
+      "command": "oh-my-product",
+      "args": [
+        "tools",
+        "serve"
+      ]
+    }
+  },
+  "experimental": {
+    "enableAgents": true
+  }
+}
