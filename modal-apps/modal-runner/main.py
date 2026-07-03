@@ -13,6 +13,7 @@ import asyncpg
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # ──────────────── Modal App ────────────────
 modal_app = App("commit-tracker")
@@ -226,7 +227,10 @@ async def webhook(
         # Fire-and-forget ผ่าน BackgroundTasks (FastAPI)
         # หมายเหตุ: background_tasks ของ FastAPI จะทำงานหลัง response ถูกส่ง
         background_tasks.add_task(process_commit_payload, payload, platform)
-        return {"status": "accepted", "detail": "Processing in background"}
+        return JSONResponse(
+            status_code=202,
+            content={"status": "accepted", "detail": "Processing in background"},
+        )
 
 @app.get("/api/tasks")
 async def get_tasks(status: Optional[str] = None, assignee: Optional[str] = None):

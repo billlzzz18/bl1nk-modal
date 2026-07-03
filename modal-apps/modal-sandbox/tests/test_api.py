@@ -4,7 +4,7 @@ import modal
 import pytest
 from fastapi.testclient import TestClient
 
-import modal_app
+import modal_sandbox_app as modal_app
 
 client = TestClient(modal_app.api)
 

@@ -52,6 +52,6 @@ def test_async_processing_returns_accepted(monkeypatch):
         content=json.dumps({"commits": []}).encode(),
     )
 
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     assert resp.json()["status"] == "accepted"
     mock_process.assert_awaited_once()

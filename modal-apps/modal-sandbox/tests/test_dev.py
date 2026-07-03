@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-import modal_app
+import modal_sandbox_app as modal_app
 
 
 def test_dev_reports_found_and_missing_tools():

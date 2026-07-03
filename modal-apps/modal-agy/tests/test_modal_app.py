@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-import modal_app
+import modal_agy_app as modal_app
 
 
 def test_run_orchestrator_runs_script_when_present():
