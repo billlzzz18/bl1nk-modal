@@ -48,11 +48,11 @@ image = (
 @app.function(image=image)
 def build() -> dict[str, str]:
     """Smoke-test entrypoint: verify the toolchain baked into the image is on PATH."""
-    import subprocess
+    import shutil
 
     tools = ["rustc", "cargo", "git", "gh", "node", "npm", "bun"]
     results = {}
     for tool in tools:
-        proc = subprocess.run(["which", tool], capture_output=True, text=True)
-        results[tool] = proc.stdout.strip() if proc.returncode == 0 else "not found"
+        path = shutil.which(tool)
+        results[tool] = path if path is not None else "not found"
     return results

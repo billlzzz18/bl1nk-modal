@@ -1,21 +1,15 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import build_bl1nk_rust
 
 
 def test_build_reports_found_and_missing_tools():
-    def fake_run(args, capture_output, text):
-        tool = args[1]
-        result = MagicMock()
+    def fake_which(tool):
         if tool in ("rustc", "cargo"):
-            result.returncode = 0
-            result.stdout = f"/usr/local/bin/{tool}\n"
-        else:
-            result.returncode = 1
-            result.stdout = ""
-        return result
+            return f"/usr/local/bin/{tool}"
+        return None
 
-    with patch("subprocess.run", side_effect=fake_run):
+    with patch("shutil.which", side_effect=fake_which):
         result = build_bl1nk_rust.build.local()
 
     assert result["rustc"] == "/usr/local/bin/rustc"
