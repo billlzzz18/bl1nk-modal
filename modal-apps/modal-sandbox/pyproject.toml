@@ -1,7 +1,7 @@
 [project]
 name = "modal-sandbox"
-version = "0.1.0"
-description = "Modal Sandbox Service"
+version = "0.2.0"
+description = "Modal Sandbox Service - v2.1 architecture with sandbox-id-based design"
 requires-python = ">=3.12"
 
 dependencies = [

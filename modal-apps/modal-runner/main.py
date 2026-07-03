@@ -17,10 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # ──────────────── Modal App ────────────────
 modal_app = App("commit-tracker")
 
-image = (
-    modal.Image.debian_slim()
+image = modal.Image.from_name("bl1nk-rust:latest") \
     .pip_install("fastapi", "uvicorn", "httpx", "asyncpg", "python-dotenv")
-)
 
 # ──────────────── FastAPI App ────────────────
 app = FastAPI(title="Commit Task Tracker")

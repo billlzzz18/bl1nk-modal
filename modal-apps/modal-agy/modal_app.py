@@ -5,7 +5,7 @@ from pathlib import Path
 app = modal.App("agent-sandbox-orchestrator")
 volume = modal.Volume.from_name("persistent_agents", create_if_missing=True)
 
-@app.function(volumes={"/mnt/persistent_agents": volume}, timeout=1800)
+@app.function(image=modal.Image.from_name("bl1nk-rust:latest"), volumes={"/mnt/persistent_agents": volume}, timeout=1800)
 def run_orchestrator():
     script = Path("/mnt/persistent_agents/orchestrator.sh")
     if not script.exists():

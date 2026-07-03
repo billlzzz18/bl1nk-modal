@@ -43,3 +43,8 @@ image = (
     )
     .env({"HOME": "/home/workspace", "PATH": "/home/workspace/.local/bin:/home/workspace/.cargo/bin:/usr/local/bin:/usr/bin:/bin"})
 )
+
+
+@app.function(image=image)
+def build():
+    pass

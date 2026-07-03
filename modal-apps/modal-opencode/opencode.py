@@ -2,22 +2,8 @@ import modal
 from fastapi import FastAPI, Request, HTTPException
 import os
 
-# Define the Image for Modal
-rust_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "clang", "pkg-config")
-    .run_commands(
-        "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
-        "export PATH=$PATH:$HOME/.cargo/bin",
-        "pip install maturin"
-    )
-    .copy_local_dir("./engine", "/root/engine")
-    .run_commands(
-        "cd /root/engine && maturin develop"
-    )
-)
-
-app = modal.App("sovereign-gateway", image=rust_image)
+# Use the latest shared bl1nk-rust image instead of rebuilding Rust toolchain each deploy
+app = modal.App("sovereign-gateway", image=modal.Image.from_name("bl1nk-rust:latest"))
 web_app = FastAPI()
 
 import hmac
