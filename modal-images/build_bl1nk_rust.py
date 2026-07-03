@@ -46,5 +46,13 @@ image = (
 
 
 @app.function(image=image)
-def build():
-    pass
+def build() -> dict[str, str]:
+    """Smoke-test entrypoint: verify the toolchain baked into the image is on PATH."""
+    import subprocess
+
+    tools = ["rustc", "cargo", "git", "gh", "node", "npm", "bun"]
+    results = {}
+    for tool in tools:
+        proc = subprocess.run(["which", tool], capture_output=True, text=True)
+        results[tool] = proc.stdout.strip() if proc.returncode == 0 else "not found"
+    return results

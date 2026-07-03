@@ -84,3 +84,74 @@ impl Detector {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_type_feat() {
+        let d = Detector::new();
+        assert_eq!(d.detect("let's add a new feature", "type"), Some("feat".to_string()));
+    }
+
+    #[test]
+    fn test_detect_type_fix() {
+        let d = Detector::new();
+        assert_eq!(d.detect("fix the login bug", "type"), Some("fix".to_string()));
+    }
+
+    #[test]
+    fn test_detect_stage_test() {
+        let d = Detector::new();
+        assert_eq!(d.detect("we are testing this", "stage"), Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_detect_priority_p0() {
+        let d = Detector::new();
+        assert_eq!(d.detect("this is an urgent blocker", "p"), Some("p0".to_string()));
+    }
+
+    #[test]
+    fn test_detect_lang_rust() {
+        let d = Detector::new();
+        assert_eq!(d.detect("written in rust", "lang"), Some("rust".to_string()));
+    }
+
+    #[test]
+    fn test_detect_env_prod() {
+        let d = Detector::new();
+        assert_eq!(d.detect("deploy to production", "env"), Some("prod".to_string()));
+    }
+
+    #[test]
+    fn test_detect_constraint_mobile() {
+        let d = Detector::new();
+        assert_eq!(d.detect("mobile-first design", "constraint"), Some("mobile".to_string()));
+    }
+
+    #[test]
+    fn test_detect_plat_github() {
+        let d = Detector::new();
+        assert_eq!(d.detect("check out my github repo", "plat"), Some("github".to_string()));
+    }
+
+    #[test]
+    fn test_detect_is_case_insensitive() {
+        let d = Detector::new();
+        assert_eq!(d.detect("FIX the crash", "type"), Some("fix".to_string()));
+    }
+
+    #[test]
+    fn test_detect_returns_none_for_no_match() {
+        let d = Detector::new();
+        assert_eq!(d.detect("nothing relevant here", "type"), None);
+    }
+
+    #[test]
+    fn test_detect_returns_none_for_unknown_category() {
+        let d = Detector::new();
+        assert_eq!(d.detect("fix the bug", "not_a_real_category"), None);
+    }
+}

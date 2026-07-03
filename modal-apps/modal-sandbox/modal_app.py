@@ -173,8 +173,16 @@ def logs(sid: str):
 
 
 @app.function(image=image)
-def dev():
-    pass
+def dev() -> dict[str, str]:
+    """Smoke-test entrypoint: verify the toolchain baked into the image is on PATH."""
+    import subprocess
+
+    tools = ["git", "gh", "node", "npm", "bun", "cargo", "rustc"]
+    results = {}
+    for tool in tools:
+        proc = subprocess.run(["which", tool], capture_output=True, text=True)
+        results[tool] = proc.stdout.strip() if proc.returncode == 0 else "not found"
+    return results
 
 
 @app.function(image=image)

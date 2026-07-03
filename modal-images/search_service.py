@@ -345,4 +345,13 @@ def startup():
 
 @app.on_event("shutdown")
 def shutdown():
-    pass
+    global _tokenizer, _embed_model, _rerank_tokenizer, _rerank_model, _index, _metadata, _ids
+    _tokenizer = None
+    _embed_model = None
+    _rerank_tokenizer = None
+    _rerank_model = None
+    _index = None
+    _metadata = {}
+    _ids = []
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
