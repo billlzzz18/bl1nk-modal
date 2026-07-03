@@ -161,6 +161,16 @@ class AuthVerifyResponse(BaseModel):
     token_id: str
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "bl1nk-search",
+        "status": "ok",
+        "endpoints": ["/health", "/auth/verify", "/index", "/query", "/update", "/delete", "/code/search", "/docs/search", "/session/search", "/memory/search"],
+        "trace_id": str(uuid.uuid4()),
+    }
+
+
 @app.get("/health")
 def health():
     services = {
@@ -215,7 +225,31 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
         return IndexResult(success=False, id=payload.id, trace_id=tid, error=Error(code="index_error", message=str(e)))
 
 
-@app.post("/query", response_model=QueryResult)
+@app.post("/code/search")
+def code_search(request: dict, authorization: Optional[str] = Header(None)):
+    request["source_type"] = "code"
+    return _query_json(request, authorization)
+
+
+@app.post("/docs/search")
+def docs_search(request: dict, authorization: Optional[str] = Header(None)):
+    request["source_type"] = "doc"
+    return _query_json(request, authorization)
+
+
+@app.post("/session/search")
+def session_search(request: dict, authorization: Optional[str] = Header(None)):
+    request["source_type"] = "session"
+    return _query_json(request, authorization)
+
+
+@app.post("/memory/search")
+def memory_search(request: dict, authorization: Optional[str] = Header(None)):
+    request["source_type"] = "memory"
+    return _query_json(request, authorization)
+
+
+@app.post("/query")
 def query(request: dict, authorization: Optional[str] = Header(None)):
     assert_token(authorization)
     tid = str(uuid.uuid4())
@@ -224,7 +258,7 @@ def query(request: dict, authorization: Optional[str] = Header(None)):
     source_type = request.get("source_type")
     top_k = min(request.get("top_k", 10), 100)
     if _index is None or _index.ntotal == 0:
-        return QueryResult(results=[], meta=QueryMeta(latency_ms=0, empty=True, trace_id=tid))
+        return _query_empty(tid)
     try:
         get_models()
         q_vec = embed(q)
@@ -248,9 +282,24 @@ def query(request: dict, authorization: Optional[str] = Header(None)):
                 h["score"] = rerank_scores[i]
             hits = sorted(hits, key=lambda x: x["score"], reverse=True)[:top_k]
         latency = int((time.time() - start) * 1000)
-        return QueryResult(results=[SearchHit(id=h["id"], score=h["score"], content=h["content"]) for h in hits], meta=QueryMeta(latency_ms=latency, empty=len(hits) == 0, trace_id=tid))
+        return _query_ok(tid, latency, hits)
     except Exception as e:
         raise HTTPException(status_code=500, detail={"code": "query_error", "message": str(e), "trace_id": tid})
+
+
+def _query_json(request: dict, authorization: Optional[str] = Header(None)):
+    return query(request, authorization)
+
+
+def _query_empty(tid: str):
+    return {"results": [], "meta": {"latency_ms": 0, "empty": True, "trace_id": tid}}
+
+
+def _query_ok(tid: str, latency: int, hits):
+    return {
+        "results": [{"id": h["id"], "score": h["score"], "content": h["content"]} for h in hits],
+        "meta": {"latency_ms": latency, "empty": len(hits) == 0, "trace_id": tid},
+    }
 
 
 @app.post("/delete", response_model=DeleteResult)
@@ -287,6 +336,8 @@ def update(request: UpdateRequest, authorization: Optional[str] = Header(None)):
 
 @app.on_event("startup")
 def startup():
+    import sys
+    sys.setrecursionlimit(2000)
     get_models()
     global _index
     _index = faiss.IndexFlatIP(1024)

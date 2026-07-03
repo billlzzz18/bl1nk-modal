@@ -11,7 +11,7 @@ secret = modal.Secret.from_name("bl1nk-search-auth")
     timeout=7200,
     secrets=[secret],
 )
-@modal.asgi_app()
+@modal.fastapi_endpoint(label="bl1nk-search-v2")
 def api():
     from search_service import app as fastapi_app
     return fastapi_app
