@@ -65,3 +65,71 @@ impl Resolver {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strings(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_detected_label_replaces_existing_in_exclusive_group() {
+        let result = Resolver::resolve(
+            strings(&["stage:test"]),
+            vec![],
+            vec![],
+            strings(&["stage:plan"]),
+            vec![],
+        );
+        assert!(result.contains(&"stage:test".to_string()));
+        assert!(!result.contains(&"stage:plan".to_string()));
+    }
+
+    #[test]
+    fn test_manual_remove_deletes_current_label() {
+        let result = Resolver::resolve(vec![], vec![], strings(&["p:p2"]), strings(&["p:p2"]), vec![]);
+        assert!(!result.contains(&"p:p2".to_string()));
+        // Default priority kicks back in once p:p2 is gone.
+        assert!(result.contains(&"p:p1".to_string()));
+    }
+
+    #[test]
+    fn test_manual_add_overrides_detected_in_exclusive_group() {
+        let result = Resolver::resolve(strings(&["type:feat"]), strings(&["type:fix"]), vec![], vec![], vec![]);
+        assert!(result.contains(&"type:fix".to_string()));
+        assert!(!result.contains(&"type:feat".to_string()));
+    }
+
+    #[test]
+    fn test_non_exclusive_labels_are_not_removed() {
+        let result = Resolver::resolve(strings(&["rev:ready"]), vec![], vec![], vec![], vec![]);
+        assert!(result.contains(&"rev:ready".to_string()));
+    }
+
+    #[test]
+    fn test_ensure_defaults_fills_missing_groups() {
+        let result = Resolver::resolve(vec![], vec![], vec![], vec![], vec![]);
+        assert!(result.contains(&"stage:spec".to_string()));
+        assert!(result.contains(&"size:m".to_string()));
+        assert!(result.contains(&"p:p1".to_string()));
+    }
+
+    #[test]
+    fn test_ensure_defaults_does_not_override_present_groups() {
+        let result = Resolver::resolve(vec![], vec![], vec![], strings(&["stage:act", "size:l", "p:p0"]), vec![]);
+        assert!(result.contains(&"stage:act".to_string()));
+        assert!(result.contains(&"size:l".to_string()));
+        assert!(result.contains(&"p:p0".to_string()));
+        assert!(!result.contains(&"stage:spec".to_string()));
+    }
+
+    #[test]
+    fn test_result_is_sorted() {
+        let result = Resolver::resolve(strings(&["type:feat", "lang:rust"]), vec![], vec![], vec![], vec![]);
+        let mut sorted = result.clone();
+        sorted.sort();
+        assert_eq!(result, sorted);
+    }
+}

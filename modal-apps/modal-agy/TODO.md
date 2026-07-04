@@ -1,12 +1,12 @@
 # TODO - modal-agy (agent-sandbox-orchestrator)
 
 ## Missing Files
-- [ ] pyproject.toml - project metadata and dependencies
-- [ ] tests/ - no test directory
+- [x] pyproject.toml - project metadata and dependencies
+- [x] tests/ - test directory
 
 ## Missing Tests
 - [ ] tests/test_image.py - verify image build (Rust, Node, gh, agy)
-- [ ] tests/test_modal_app.py - run_orchestrator function
+- [x] tests/test_modal_app.py - run_orchestrator function
 - [ ] tests/test_orchestrator.sh - bash script unit tests
 
 ## Code Issues

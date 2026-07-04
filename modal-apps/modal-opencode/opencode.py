@@ -33,7 +33,7 @@ async def get_ui():
             <div id="state">Loading...</div>
             <h2>Recent Timeline</h2>
             <div id="timeline">Loading...</div>
-            
+
             <script>
                 async function loadData() {
                     const stateRes = await fetch('/api/state');
@@ -85,7 +85,7 @@ def get_jwt():
     # โหลด Private Key จาก Modal Secret
     private_key = os.environ["GITHUB_PRIVATE_KEY"].replace("\\n", "\n")
     app_id = os.environ["GITHUB_APP_ID"]
-    
+
     payload = {
         "iat": int(time.time()),
         "exp": int(time.time()) + (10 * 60),
@@ -139,7 +139,7 @@ async def sync_labels(repo: str, issue_number: int, labels: list, token: str):
 async def github_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
-    
+
     # Verify Signature
     secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
     expected_signature = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
@@ -150,7 +150,7 @@ async def github_webhook(request: Request):
     payload = json.loads(body)
     event_type = request.headers.get("X-GitHub-Event")
     installation_id = payload.get("installation", {}).get("id")
-    
+
     if not installation_id:
         return {"status": "ignored", "reason": "no installation id"}
 
@@ -164,11 +164,11 @@ async def github_webhook(request: Request):
     title = issue_or_pr.get("title", "")
     body_text = issue_or_pr.get("body", "")
     current_labels = [l["name"] for l in issue_or_pr.get("labels", [])]
-    
+
     #ดึงไฟล์ที่แก้ (ถ้าเป็น PR)
     changed_files = []
     token = await get_installation_token(installation_id)
-    
+
     if "pull_request" in payload:
         changed_files = await get_changed_files(repo_name, issue_id, token)
         additions = payload["pull_request"].get("additions", 0)
@@ -188,24 +188,24 @@ async def github_webhook(request: Request):
     # บันทึกลง Database
     with get_db() as conn:
         cursor = conn.cursor()
-        
+
         # Append to timeline
         cursor.execute("""
             INSERT INTO timeline (repo, issue_or_pr_id, event_type, labels, actor)
             VALUES (?, ?, ?, ?, ?)
         """, (repo_name, issue_id, event_type, json.dumps(new_labels), payload.get("sender", {}).get("login", "unknown")))
-        
+
         # Update current state
         state_label = next((l.split(":")[1] for l in new_labels if l.starts_with("stage:")), "unknown")
         agent_label = next((l.split(":")[1] for l in new_labels if l.starts_with("agent:")), "none")
         blocked = any(l.startswith("auto:blocking") or l == "Bug" for l in new_labels)
 
         cursor.execute("""
-            INSERT OR REPLACE INTO current_state 
+            INSERT OR REPLACE INTO current_state
             (repo, issue_or_pr_id, current_labels, current_state, blocked, last_agent, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (repo_name, issue_id, json.dumps(new_labels), state_label, blocked, agent_label))
-        
+
         conn.commit()
 
     return {
@@ -254,7 +254,7 @@ async def install_callback(installation_id: str, setup_action: str = None):
             VALUES (?, ?, ?)
         """, (installation_id, "unknown", "unknown"))
         conn.commit()
-    
+
     return {"status": "installed", "installation_id": installation_id}
 
 import sqlite3
@@ -276,7 +276,7 @@ def get_db():
 def init_db():
     if not os.path.exists("/data"):
         os.makedirs("/data", exist_ok=True)
-    
+
     with get_db() as conn:
         cursor = conn.cursor()
         # Installation table

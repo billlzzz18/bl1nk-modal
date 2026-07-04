@@ -1,0 +1,54 @@
+name: Sync triage labels
+
+# Creates/updates the plain category + state labels the `.claude/skills/triage`
+# skill expects on this repo's issue tracker. Unrelated to the bl1nk `type:`/
+# `stage:`/`size:` prefix-label taxonomy used elsewhere in this repo.
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - .github/workflows/sync-triage-labels.yml
+
+permissions:
+  issues: write
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: "bug", color: "d73a4a", description: "Something is broken" },
+              { name: "enhancement", color: "a2eeef", description: "New feature or improvement" },
+              { name: "needs-triage", color: "ededed", description: "Maintainer needs to evaluate" },
+              { name: "needs-info", color: "d4c5f9", description: "Waiting on reporter for more information" },
+              { name: "ready-for-agent", color: "0e8a16", description: "Fully specified, ready for an AFK agent" },
+              { name: "ready-for-human", color: "1d76db", description: "Needs human implementation" },
+              { name: "wontfix", color: "ffffff", description: "Will not be actioned" },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+                core.info(`created ${label.name}`);
+              } catch (err) {
+                if (err.status === 422) {
+                  await github.rest.issues.updateLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    new_name: label.name,
+                    color: label.color,
+                    description: label.description,
+                  });
+                  core.info(`updated ${label.name}`);
+                } else {
+                  throw err;
+                }
+              }
+            }

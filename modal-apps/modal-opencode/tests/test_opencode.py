@@ -23,7 +23,7 @@ def test_tool_list_directory_simple(tmp_path):
     (tmp_path / "subdir").mkdir()
     (tmp_path / "file1.txt").write_text("content")
     (tmp_path / "subdir" / "file2.txt").write_text("content")
-    
+
     # Test flat list
     result = tool_list_directory(path=str(tmp_path), tree=False)
     assert result["success"] is True
@@ -34,7 +34,7 @@ def test_tool_list_directory_tree(tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "a" / "b").mkdir()
     (tmp_path / "a" / "file.py").write_text("code")
-    
+
     result = tool_list_directory(path=str(tmp_path), tree=True)
     assert result["success"] is True
     assert "a/" in result["content"]
@@ -45,14 +45,14 @@ def test_tool_edit_success(tmp_path):
     # Create a dummy file
     test_file = tmp_path / "hello.py"
     test_file.write_text("print('hello')\nprint('world')")
-    
+
     # Call tool_edit
     result = tool_edit(
         path=str(test_file),
         old_string="print('world')",
         new_string="print('agent')"
     )
-    
+
     assert result["success"] is True
     assert "print('agent')" in test_file.read_text()
     assert "print('world')" not in test_file.read_text()
@@ -65,7 +65,7 @@ def test_tool_edit_file_not_found():
 def test_tool_edit_string_not_found(tmp_path):
     test_file = tmp_path / "data.txt"
     test_file.write_text("apple pie")
-    
+
     result = tool_edit(path=str(test_file), old_string="banana", new_string="cherry")
     assert result["success"] is False
     assert "not found" in result["error"].lower()
@@ -74,21 +74,21 @@ def test_tool_edit_string_not_found(tmp_path):
 def test_webhook_unauthorized_missing_password(mock_run):
     # Set server password
     os.environ["KILO_SERVER_PASSWORD"] = "secret123"
-    
+
     # Call webhook without password in body
     request_data = {"prompt": "test"}
     response = webhook.local(request_data)
-    
+
     assert isinstance(response, JSONResponse)
     assert response.status_code == 401
 
 @patch("opencode.run_conversation")
 def test_webhook_unauthorized_wrong_password(mock_run):
     os.environ["KILO_SERVER_PASSWORD"] = "secret123"
-    
+
     request_data = {"prompt": "test", "password": "wrong"}
     response = webhook.local(request_data)
-    
+
     assert isinstance(response, JSONResponse)
     assert response.status_code == 401
 
@@ -100,10 +100,10 @@ def test_webhook_unauthorized_if_server_password_not_set(mock_run):
         del os.environ["KILO_SERVER_PASSWORD"]
     if "OPENCODE_SERVER_PASSWORD" in os.environ:
         del os.environ["OPENCODE_SERVER_PASSWORD"]
-        
+
     request_data = {"prompt": "test"}
     response = webhook.local(request_data)
-    
+
     # Goal: it should return 401 if password is missing in request
     assert isinstance(response, JSONResponse)
     assert response.status_code == 401

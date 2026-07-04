@@ -48,12 +48,12 @@ app = modal.App("agy-image", image=agi_image)
 def run_cmd(cmd: str = ""):
     """Run command. MCP servers configured in settings.json."""
     import subprocess, os
-    
+
     env = os.environ.copy()
     env["PATH"] = "/root/.cargo/bin:/root/.local/bin:" + env.get("PATH", "")
     env["CARGO_HOME"] = "/root/.cargo"
     env["RUSTUP_HOME"] = "/root/.rustup"
-    
+
     if cmd:
         r = subprocess.run(cmd, shell=True, env=env, timeout=600)
         return r.returncode

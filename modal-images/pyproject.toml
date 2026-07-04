@@ -8,9 +8,23 @@ dependencies = [
     "modal>=0.70.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "fastapi>=0.116.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.0",
+    "numpy>=1.24",
+    "ruff>=0.12.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["build_bl1nk_rust"]
+py-modules = ["build_bl1nk_rust", "build_bl1nk_search", "deploy_bl1nk_search", "search_service", "_tags"]

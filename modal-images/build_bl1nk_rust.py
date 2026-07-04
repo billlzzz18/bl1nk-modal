@@ -1,8 +1,12 @@
 import modal
 
-APP_NAME = "image-builds"
+from _tags import publish_versioned
 
-app = modal.App(APP_NAME)
+APP_NAME = "image-builds"
+IMAGE_NAME = "bl1nk-rust"
+MAJOR_VERSION = "v2"  # bump this one line when the toolchain changes enough to warrant it
+
+app = modal.App.lookup(APP_NAME, create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -44,7 +48,20 @@ image = (
     .env({"HOME": "/home/workspace", "PATH": "/home/workspace/.local/bin:/home/workspace/.cargo/bin:/usr/local/bin:/usr/bin:/bin"})
 )
 
+with modal.enable_output():
+    built = image.build(app)
+
+publish_versioned(built, IMAGE_NAME, MAJOR_VERSION)
+
 
 @app.function(image=image)
-def build():
-    pass
+def build() -> dict[str, str]:
+    """Smoke-test entrypoint: verify the toolchain baked into the image is on PATH."""
+    import shutil
+
+    tools = ["rustc", "cargo", "git", "gh", "node", "npm", "bun"]
+    results = {}
+    for tool in tools:
+        path = shutil.which(tool)
+        results[tool] = path if path is not None else "not found"
+    return results

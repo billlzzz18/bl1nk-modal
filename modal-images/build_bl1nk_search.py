@@ -1,6 +1,9 @@
 import modal
 
+from _tags import publish_versioned
+
 APP_NAME = "bl1nk-search"
+MAJOR_VERSION = "v1"  # bump this one line when the model/runtime stack changes enough to warrant it
 
 app = modal.App.lookup(APP_NAME, create_if_missing=True)
 
@@ -50,6 +53,4 @@ image = (
 with modal.enable_output():
     built = image.build(app)
 
-built.publish("bl1nk-search:latest")
-built.publish("bl1nk-search:v1")
-built.publish("bl1nk-search:v1-20260702")
+publish_versioned(built, APP_NAME, MAJOR_VERSION)

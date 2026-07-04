@@ -24,7 +24,7 @@ fn resolve_full_state(
 ) -> Vec<String> {
     let detector = Detector::new();
     let full_text = format!("{} {}", title, body);
-    
+
     let mut detected = Vec::new();
 
     // 1. ตรวจจากข้อความ (Regex)
@@ -69,11 +69,11 @@ mod tests {
         // จำลองสถานการณ์: แก้ไฟล์ .rs (ต้องได้ lang:rust) และ Cargo.toml (ต้องได้ type:dep)
         let title = "update stuff".to_string();
         let changed_files = vec!["src/main.rs".to_string(), "Cargo.toml".to_string()];
-        
+
         let result = resolve_full_state(
             title, "".to_string(), 10, 5, changed_files, vec![], vec![], vec![]
         );
-        
+
         assert!(result.contains(&"lang:rust".to_string()));
         assert!(result.contains(&"type:dep".to_string()));
     }
@@ -84,11 +84,11 @@ mod tests {
         let title = "finish work".to_string();
         let changed_files = vec!["src/lib.rs".to_string()]; // มีการแก้โค้ด
         let manual_add = vec!["stage:finalize".to_string()]; // พยายามย้ายไปจบงาน
-        
+
         let result = resolve_full_state(
             title, "".to_string(), 10, 5, changed_files, vec![], manual_add, vec![]
         );
-        
+
         // ผลลัพธ์: ต้องถูกดึงกลับมาที่ stage:review เพราะมี code change และยังไม่ได้ Approve (rev:ready)
         assert!(result.contains(&"stage:review".to_string()));
         assert!(result.contains(&"auto:wait".to_string()));

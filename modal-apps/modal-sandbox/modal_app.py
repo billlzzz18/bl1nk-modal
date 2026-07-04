@@ -173,8 +173,16 @@ def logs(sid: str):
 
 
 @app.function(image=image)
-def dev():
-    pass
+def dev() -> dict[str, str]:
+    """Smoke-test entrypoint: verify the toolchain baked into the image is on PATH."""
+    import shutil
+
+    tools = ["git", "gh", "node", "npm", "bun", "cargo", "rustc"]
+    results = {}
+    for tool in tools:
+        path = shutil.which(tool)
+        results[tool] = path if path is not None else "not found"
+    return results
 
 
 @app.function(image=image)

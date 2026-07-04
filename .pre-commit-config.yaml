@@ -9,6 +9,30 @@ repos:
       - id: check-added-large-files
   - repo: local
     hooks:
+      - id: ruff-modal-runner
+        name: ruff (modal-runner)
+        entry: bash -c 'cd modal-apps/modal-runner && ruff check . && ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^modal-apps/modal-runner/
+      - id: ruff-modal-agy
+        name: ruff (modal-agy)
+        entry: bash -c 'cd modal-apps/modal-agy && ruff check . && ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^modal-apps/modal-agy/
+      - id: ruff-modal-sandbox
+        name: ruff (modal-sandbox)
+        entry: bash -c 'cd modal-apps/modal-sandbox && ruff check . && ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^modal-apps/modal-sandbox/
+      - id: ruff-modal-images
+        name: ruff (modal-images)
+        entry: bash -c 'cd modal-images && ruff check . && ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^modal-images/
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --check
