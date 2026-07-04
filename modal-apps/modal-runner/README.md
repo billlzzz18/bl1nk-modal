@@ -49,6 +49,6 @@ modal deploy main.py
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
-pytest
+uv sync
+uv run pytest
 ```
