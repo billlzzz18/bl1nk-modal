@@ -63,21 +63,21 @@ jobs:
         run: |
           declare -a ADD_ARGS
           declare -a REMOVE_ARGS
-          
+
           if [[ -n "${{ github.event.inputs.add_labels }}" ]]; then
             mapfile -t LABELS < <(echo "${{ github.event.inputs.add_labels }}" | tr ' ' '\n')
             for label in "${LABELS[@]}"; do
               ADD_ARGS+=("--add-label" "$label")
             done
           fi
-          
+
           if [[ -n "${{ github.event.inputs.remove_labels }}" ]]; then
             mapfile -t LABELS < <(echo "${{ github.event.inputs.remove_labels }}" | tr ' ' '\n')
             for label in "${LABELS[@]}"; do
               REMOVE_ARGS+=("--remove-label" "$label")
             done
           fi
-          
+
           .github/scripts/auto-label.sh "${ADD_ARGS[@]}" "${REMOVE_ARGS[@]}"
 
   # Job 2: Sync labels from linked issue to PR

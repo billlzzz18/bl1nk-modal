@@ -117,6 +117,25 @@ uv run --env-file .env modal serve main.py
 
 In production these are Modal secrets (`modal secret create ...`), not env vars — the `.env.example` files are for running things locally only. `modal-agy` and `modal-sandbox` don't need one; neither reads any app-level env vars.
 
+## Formatting, line endings, and Windows setup
+
+Root-level `.editorconfig` and `.gitattributes` keep formatting and line endings consistent across every directory in this monorepo (every editor/IDE picks up `.editorconfig` automatically; Git normalizes checked-in files to LF per `.gitattributes`, `uv.lock`/`Cargo.lock` are marked generated so they don't pollute diffs).
+
+**Python formatting:** every Python project (`modal-runner`, `modal-agy`, `modal-sandbox`, `modal-images`) declares `ruff` in `[dependency-groups].dev` with a matching `[tool.ruff]` block (`line-length = 100`, `target-version` pinned to that project's `requires-python`) and has a scoped `ruff-<name>` hook in `.pre-commit-config.yaml`. Run it per project: `cd <project> && uv run ruff check . && uv run ruff format .`
+
+**Whitespace/line-ending sweep:** `.pre-commit-config.yaml`'s `trailing-whitespace`/`end-of-file-fixer` hooks only touch staged files at commit time. To normalize the whole tree in one pass (e.g. after a large merge, or to check CI-side), use the root-level script instead of reaching for `sed`/sed-per-OS scripts — it's pure-stdlib Python so it runs the same on Linux/macOS/Windows/Termux:
+
+```bash
+python3 scripts/fix_whitespace.py          # fix in place
+python3 scripts/fix_whitespace.py --check  # report only, exit 1 if dirty (CI)
+```
+
+**Windows bootstrap:** `scripts/install-windows.ps1` installs everything needed to work on this repo from a clean Windows machine — `uv`, the Rust toolchain (rustup, for `modal-apps/modal-opencode/engine`), the Modal CLI, and `pre-commit` — then runs `uv sync` in every Python project directory and installs the repo's pre-commit hooks. Idempotent; re-running skips anything already installed.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+```
+
 ## MCP servers
 
 `.mcp.json` at the repo root declares project-scoped MCP servers for Claude Code: **context7** (library docs lookup, `https://mcp.context7.com/mcp`) and **linear** (`https://mcp.linear.app/mcp`). Both are OAuth-authenticated through Claude Code's own `/mcp` panel on first use — no keys go in the file. Claude Code will prompt to approve project-scoped servers the first time this repo is opened; that's expected.

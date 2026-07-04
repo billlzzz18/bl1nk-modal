@@ -128,3 +128,19 @@ Pre-commit hooks run via the Python **`pre-commit`** framework (`.pre-commit-con
 
 - A version bump is a one-line edit in one file; the date is never hand-typed.
 - Any future build script for a new image should reuse this pattern (see the updated `modal-image-builds` skill template) instead of reintroducing hardcoded version/date literals.
+
+---
+
+### Repo-wide formatting, line-ending normalization, and Windows bootstrap
+
+**Date:** 2026-07-04
+**Status:** Done
+
+**Context:** There was no root-level `.editorconfig`/`.gitattributes`, so editor indentation and line endings could drift per-directory; `ruff` was only declared in `modal-sandbox/pyproject.toml` even though it's this repo's Python formatter/linter; there was no repo-wide way to sweep whitespace/line-ending drift outside of what `pre-commit` catches on staged files; and there was no bootstrap path for a Windows machine with nothing installed (every existing setup script — `modal-agy/setup.sh`, `modal-sandbox/scripts/setup.sh` — is bash-only).
+
+**Decision:** Added root `.editorconfig` and `.gitattributes` (LF-normalized, lockfiles marked generated). Added matching `ruff` dev-dependency + `[tool.ruff]` config to `modal-runner`, `modal-agy`, and `modal-images` (previously only `modal-sandbox` had it), with scoped `ruff-<name>` pre-commit hooks for all four. Added `scripts/fix_whitespace.py` — pure-stdlib Python, no `sed`/OS-specific tooling — to normalize CRLF/trailing whitespace/final-newline across every tracked text file in one pass, with a `--check` mode for CI. Added `scripts/install-windows.ps1`, a PowerShell bootstrap that installs `uv`, Rust/rustup, the Modal CLI, and `pre-commit`, then runs `uv sync` in every Python project.
+
+**Consequences:**
+
+- New Python projects should follow the same `ruff` dev-dep + `[tool.ruff]` + pre-commit hook pattern from the start rather than adding it later.
+- `scripts/` at the repo root is now the home for cross-project tooling (as opposed to per-app `scripts/` dirs like `modal-apps/modal-sandbox/scripts/`); a future Windows-equivalent of any bash-only root script belongs there too.
