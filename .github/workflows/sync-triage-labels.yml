@@ -5,6 +5,9 @@ name: Sync triage labels
 # `stage:`/`size:` prefix-label taxonomy used elsewhere in this repo.
 on:
   workflow_dispatch: {}
+  push:
+    paths:
+      - .github/workflows/sync-triage-labels.yml
 
 permissions:
   issues: write
