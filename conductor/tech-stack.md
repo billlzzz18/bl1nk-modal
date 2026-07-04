@@ -1,0 +1,114 @@
+# Technology Stack
+
+## Languages
+
+- **Python** — FastAPI/Modal apps: `modal-runner`, `modal-agy`, `modal-sandbox`, `modal-images`.
+- **Rust** — `sovereign_engine` (pyo3 extension crate) in `modal-apps/modal-opencode/engine`.
+- **Bash** — setup/orchestrator scripts (`setup.sh`, `orchestrator.sh`, `run.sh`, `build.sh`).
+
+**Planned:** a Rust CLI + desktop app, with a bun/npm wrapper so it's also runnable via `npm` or `bun`.
+
+**Hard constraint:** client-side tooling (CLI, future desktop app) must run on every OS the user works from, **including Termux on Android** — avoid platform-specific assumptions in tooling code.
+
+## Frontend
+
+None yet — CLI-only for now.
+
+**Planned:** Tauri v2 + a web frontend for the desktop app, once the CLI and API are stable.
+
+## Backend
+
+### Language & Framework
+
+**Choice:** Python + FastAPI, deployed on Modal via `modal.asgi_app()` / `modal.fastapi_endpoint()`.
+
+**Rationale:** Modal is the serverless compute target for this whole repo; FastAPI is what every existing web-facing app (`modal-runner`, `modal-sandbox`, `modal-images/search_service.py`) already uses.
+
+### Database
+
+Moving to an **adapter pattern** with three swappable layers:
+
+| Layer | Current implementation | Notes |
+| --- | --- | --- |
+| Vector store adapter | FAISS `IndexFlatIP`, in-memory | `modal-images/search_service.py` |
+| DB adapter | CrateDB via `asyncpg` | `modal-apps/modal-runner/main.py` (task tracking) |
+| Storage adapter | TBD | Not yet implemented |
+
+Default implementation runs inside the sandbox/container. Swap out a layer later only if that becomes too costly or wasteful — don't pre-optimize.
+
+### Additional Backend Libraries
+
+| Library | Purpose | Used in |
+| --- | --- | --- |
+| `asyncpg` | CrateDB client | modal-runner |
+| `httpx` | HTTP client (LINE Notify, webhooks) | modal-runner |
+| `transformers` / `torch` | Embedding + reranker models | modal-images (bl1nk-search) |
+| `faiss-cpu` | Vector search | modal-images (bl1nk-search) |
+| `pyo3` | Python↔Rust bridge | modal-opencode/engine |
+| `regex`, `serde`/`serde_json` | Rust-side label detection | modal-opencode/engine |
+
+## Infrastructure
+
+### Hosting
+
+**Provider:** Modal (serverless GPU/CPU cloud) — the primary compute/deploy target for now.
+
+**Services used:**
+
+- `modal.Image` — versioned, tagged build images (`bl1nk-rust:latest`/`v2`/`v2-YYYYMMDD`, `bl1nk-search:latest`/`v1`/`v1-YYYYMMDD`)
+- `modal.Sandbox` — ephemeral sandboxed execution (modal-sandbox, modal-agy)
+- `modal.Cron` — scheduled reports (modal-runner daily/weekly)
+- `modal.Secret` — credentials (CrateDB, LINE Notify, webhook signing secrets, bearer tokens)
+
+**Other infrastructure pieces (GitHub Actions for CI/labels, possibly Cloudflare) will likely be added later, but Modal is the focus while the core apps stabilize.**
+
+### CI/CD
+
+**Platform:** GitHub Actions (currently just `.pre-commit-config.yaml`-driven checks locally; no deploy-on-push pipeline yet).
+
+## Development Tools
+
+### Testing
+
+| Type | Tool | Notes |
+| --- | --- | --- |
+| Python unit tests | `pytest` (+ `pytest-asyncio` where needed) | Per-project `tests/` directories |
+| Rust unit tests | `cargo test` | `modal-apps/modal-opencode/engine` |
+
+### Linting & Formatting
+
+**Python:** `ruff` (lint + format) and `mypy` (type-check) — currently only declared in `modal-sandbox/pyproject.toml`; add to other projects as they need it.
+**Rust:** `cargo fmt`, `cargo clippy` (fmt enforced via `.pre-commit-config.yaml`).
+
+Pre-commit hooks run via the Python **`pre-commit`** framework (`.pre-commit-config.yaml` at repo root) — **not** Husky/npm; this repo has no `package.json`.
+
+## Decision Log
+
+### Adapter pattern for storage layers
+
+**Date:** 2026-07-04
+**Status:** Planned
+
+**Context:** `bl1nk-search` hardcodes FAISS in-memory storage and `modal-runner` hardcodes CrateDB via asyncpg — neither is swappable without a rewrite.
+
+**Decision:** Split storage into three adapters (vector store, DB, storage), each with a default sandbox-local implementation, so a layer can be swapped later without touching the rest of the app.
+
+**Consequences:**
+
+- More upfront interface design work.
+- Future backend swaps (e.g. FAISS → another vector store) become isolated changes.
+
+---
+
+### setup-pre-commit skill rewritten for this repo's actual stack
+
+**Date:** 2026-07-04
+**Status:** Done
+
+**Context:** The `.claude/skills/setup-pre-commit` skill was written entirely for Node/Husky/npm, but this repo has no `package.json` anywhere and already uses the Python `pre-commit` framework.
+
+**Decision:** Rewrote the skill around `.pre-commit-config.yaml`, scoping `ruff`/`mypy`/`pytest` hooks per Python project directory, leaving the existing `cargo fmt`/`cargo test` hooks untouched.
+
+**Consequences:**
+
+- Future pre-commit setup work in this repo follows the pattern already in place instead of introducing a Node toolchain that doesn't fit.

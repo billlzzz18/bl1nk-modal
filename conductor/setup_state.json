@@ -1,0 +1,49 @@
+{
+  "status": "complete",
+  "project_type": "brownfield",
+  "current_section": "styleguides",
+  "current_question": 2,
+  "completed_sections": ["product", "product_guidelines", "tech_stack", "workflow", "styleguides"],
+  "answers": {
+    "styleguides.languages": ["python", "rust", "typescript"],
+    "styleguides.existing_conventions": "Generate fresh guides — don't incorporate the repo's existing ruff/mypy config specifics.",
+    "workflow.tdd_strictness": "Moderate — tests encouraged, not blocking, especially where a project already has good coverage.",
+    "workflow.commit_strategy": "Conventional Commits (feat:, fix:, docs:, etc.).",
+    "workflow.code_review": "Optional / self-review OK — this is a solo-owned repo, but let bot reviewers (Kilo, CodeRabbit, CodeAnt, Gemini Code Assist) run and address their findings before merging.",
+    "workflow.verification_checkpoints": "Only at track completion — automated tests run per task/phase as work happens, but a full manual verification pass is reserved for when the whole track is done.",
+    "tech_stack.infrastructure": "Modal is the primary compute/deploy target for now. Other infrastructure pieces (e.g. GitHub Actions for CI/labels, possibly Cloudflare) will likely be added later, but Modal is the focus while the core apps stabilize.",
+    "tech_stack.languages": "Python (FastAPI/Modal apps: modal-runner, modal-agy, modal-sandbox, modal-images) and Rust (sovereign_engine pyo3 crate in modal-opencode/engine) today, plus Bash for setup/orchestrator scripts. Planned: a Rust CLI + desktop app, with a bun/npm wrapper so it's also runnable via npm or bun.",
+    "tech_stack.frontend": "None yet — CLI-only for now. Planned: Tauri v2 + a web frontend for the desktop app, once the CLI and API are stable.",
+    "tech_stack.backend": "FastAPI on Modal (modal-runner, modal-sandbox, modal-images/search_service.py), served via modal.asgi_app() / modal.fastapi_endpoint(). Hard constraint: client-side tooling (CLI, future desktop app) must run on every OS the user works from, including Termux on Android — avoid platform-specific assumptions in tooling code.",
+    "tech_stack.database": "Moving to an adapter pattern with three swappable layers: vector store adapter (currently FAISS in-memory), DB adapter (currently CrateDB via asyncpg), and storage adapter. Default implementation runs inside the sandbox/container; swap out a layer later only if that becomes too costly/wasteful.",
+    "product_guidelines.voice_tone": "Casual and friendly, primarily in Thai — this is a personal repo first, so documentation should read like notes to oneself, not a public-facing product.",
+    "product_guidelines.design_principles": [
+      "Simplicity — reuse existing image tags, rebuild only when the base toolchain/model/deps actually change",
+      "Cost-awareness — Modal compute costs money per run; don't test iteratively on Modal, get it right locally first",
+      "Developer experience for the agents using this repo",
+      "Flexible, organized architecture over rigid structure",
+      "Control cost appropriately per job/workload, not one-size-fits-all"
+    ],
+    "product.project_name": "bl1nk-modal",
+    "product.description": "A personal monorepo of Modal-hosted apps for AI-agent infrastructure: webhook task tracking (modal-runner), agent sandbox orchestration (modal-agy), a general-purpose sandbox API (modal-sandbox), and a Rust/Node dev image + embedding/reranker search service (modal-images).",
+    "product.problem_statement": "Local machines can't give a CLI agent and its human user a shared sandbox/workspace to do the same work together, and local RAM/CPU is a hard ceiling for agent workloads. Running agent tooling (sandboxes, dev containers, search) on Modal's serverless model instead means elastic compute, no idle cost, and a workspace reachable from anywhere by both the agent and the user.",
+    "product.target_users": "Solo developer and small team members who run AI coding agents (Claude Code, agy/Antigravity, opencode) that need shared sandboxed compute and a search-augmented memory index alongside the human collaborators using the same tooling.",
+    "product.key_goals": [
+      "Validate the stack with real-world usage: the human user, Claude, and Hermes all working against it.",
+      "Hermes (and other agents) can run their backend workloads on Modal reliably."
+    ]
+  },
+  "files_created": [
+    "conductor/index.md",
+    "conductor/product.md",
+    "conductor/product-guidelines.md",
+    "conductor/tech-stack.md",
+    "conductor/workflow.md",
+    "conductor/tracks.md",
+    "conductor/code_styleguides/python.md",
+    "conductor/code_styleguides/typescript.md",
+    "conductor/code_styleguides/rust.md"
+  ],
+  "started_at": "2026-07-04T00:13:55Z",
+  "last_updated": "2026-07-04T00:45:00Z"
+}
