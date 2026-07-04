@@ -7,11 +7,15 @@
 3. **Code review: Optional / self-review OK** — this is a solo-owned repo, but let bot reviewers (Kilo, CodeRabbit, CodeAnt, Gemini Code Assist) run on PRs and address their findings before merging.
 4. **Verification checkpoints: only at track completion** — automated tests run per task/phase as work happens; a full manual verification pass is reserved for when the whole track is done.
 
+## Backlog vs. Tracks
+
+Each app directory keeps its own `TODO.md` — quick, low-ceremony notes (missing tests, known code issues). `conductor/tracks.md` mirrors the current unchecked items in one place for visibility. Small, self-contained fixes can be done straight off `TODO.md` without a track. Promote an item (or a cluster of related ones) to a real track via `/conductor:new-track` when it's multi-step, cross-cutting, or worth a spec before touching code — e.g. the `modal-sandbox` auth-middleware gap or the storage-adapter thread-safety item.
+
 ## Task Lifecycle
 
 Lighter-weight than the strict red→green→refactor loop, matching "Moderate" TDD:
 
-1. **Pick the task** from the track's plan.
+1. **Pick the task** from the track's plan (or, for a small standalone fix, straight from a project's `TODO.md`).
 2. **Implement it**, adding or updating tests where the change has meaningful logic to verify (pure functions, API contracts, parsers) — skip tests for pure plumbing/config changes.
 3. **Run the relevant test suite** for the project(s) touched (`pytest` for Python projects, `cargo test` for the Rust engine).
 4. **Commit** with a Conventional Commits message.

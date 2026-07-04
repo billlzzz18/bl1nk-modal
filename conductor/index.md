@@ -17,7 +17,7 @@ Navigation hub for project context.
 
 | Document | Description |
 | --- | --- |
-| [Track Registry](./tracks.md) | All development tracks |
+| [Track Registry](./tracks.md) | All development tracks, plus the current cross-project backlog pulled from each app's `TODO.md` |
 
 ### Style Guides
 
@@ -35,10 +35,11 @@ None yet.
 
 ## Getting Started
 
-Run `/conductor:new-track` to create your first feature track. Likely first candidates based on the setup conversation:
+Check [Track Registry](./tracks.md) for the current backlog (pulled from each app's `TODO.md`) before starting new work — don't duplicate an item that's already tracked. Run `/conductor:new-track` to promote a backlog item (or cluster of related ones) into a real track once you're about to work on it. Likely first candidates based on the setup conversation:
 
-1. Storage adapter split (vector store / DB / storage adapters)
+1. Storage adapter split (vector store / DB / storage adapters) — also ties into the `search_service.py` thread-safety item in the backlog
 2. Rust CLI bootstrap (with bun/npm wrapper)
+3. Auth middleware for `modal-sandbox`'s API endpoints — currently open to anyone
 
 ---
 
