@@ -42,6 +42,7 @@ Current unchecked items, for visibility (source of truth is always the linked fi
 | [modal-opencode/engine](../modal-apps/modal-opencode/engine/TODO.md) | `resolver.rs`: `exclusive_groups` recreated per call instead of a constant | Minor perf/style |
 | [modal-opencode/engine](../modal-apps/modal-opencode/engine/TODO.md) | `detector.rs`: regex patterns hardcoded, not configurable | Design question — worth a track if it's actually going to change |
 | [modal-opencode/engine](../modal-apps/modal-opencode/engine/TODO.md) | No benchmarks for engine performance | Nice-to-have |
+| [modal-opencode](../modal-apps/modal-opencode/TODO.md) | `tests/test_opencode.py` imports functions that don't exist anywhere in the repo (`webhook`, `tool_edit`, `tool_websearch`, `run_conversation`) | Test suite is fully stale against current `opencode.py` (a GitHub App webhook gateway) — found while wiring up `.env.example` for this app |
 
 ## Completed Tracks
 

@@ -99,6 +99,28 @@ pre-commit run --all-files      # runs generic hygiene hooks + cargo fmt/test (s
 
 There is **no `package.json` anywhere in this repo** — don't reach for npm/Husky/lint-staged tooling; pre-commit hooks go through the Python `pre-commit` framework in `.pre-commit-config.yaml`.
 
+## Environment setup (first install / a new OS)
+
+Every project that needs secrets ships a `.env.example` next to its `pyproject.toml` — copy it to `.env` (gitignored) and fill in values, then load it per-command with `uv` (no `python-dotenv` dependency needed):
+
+```bash
+uv run --env-file .env pytest
+uv run --env-file .env modal serve main.py
+```
+
+| File | Covers |
+| --- | --- |
+| `.env.example` (repo root) | `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` — non-interactive Modal auth, for headless machines/Termux where `modal setup`'s browser OAuth flow doesn't work |
+| `modal-apps/modal-runner/.env.example` | CrateDB connection, LINE Notify, webhook signature secrets |
+| `modal-images/.env.example` | `bl1nk-search` bearer token auth |
+| `modal-apps/modal-opencode/.env.example` | GitHub App credentials for the `opencode.py` webhook gateway |
+
+In production these are Modal secrets (`modal secret create ...`), not env vars — the `.env.example` files are for running things locally only. `modal-agy` and `modal-sandbox` don't need one; neither reads any app-level env vars.
+
+## MCP servers
+
+`.mcp.json` at the repo root declares project-scoped MCP servers for Claude Code: **context7** (library docs lookup, `https://mcp.context7.com/mcp`) and **linear** (`https://mcp.linear.app/mcp`). Both are OAuth-authenticated through Claude Code's own `/mcp` panel on first use — no keys go in the file. Claude Code will prompt to approve project-scoped servers the first time this repo is opened; that's expected.
+
 ## Architecture notes that span multiple files
 
 ### Apps are isolated; nothing shares runtime state
