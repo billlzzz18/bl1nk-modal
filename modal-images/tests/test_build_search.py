@@ -23,3 +23,4 @@ def test_build_and_publish_bl1nk_search(monkeypatch):
     mock_built.publish.assert_any_call("bl1nk-search:v1")
     assert mock_built.publish.call_count == 3
     assert module.app is mock_app
+    assert module.MAJOR_VERSION == "v1"

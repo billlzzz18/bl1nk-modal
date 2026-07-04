@@ -22,4 +22,4 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["build_bl1nk_rust"]
+py-modules = ["build_bl1nk_rust", "build_bl1nk_search", "deploy_bl1nk_search", "search_service", "_tags"]

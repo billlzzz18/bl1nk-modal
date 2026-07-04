@@ -112,3 +112,19 @@ Pre-commit hooks run via the Python **`pre-commit`** framework (`.pre-commit-con
 **Consequences:**
 
 - Future pre-commit setup work in this repo follows the pattern already in place instead of introducing a Node toolchain that doesn't fit.
+
+---
+
+### Shared `_tags.py` helper for image version publishing
+
+**Date:** 2026-07-04
+**Status:** Done
+
+**Context:** `build_bl1nk_rust.py` never actually built or published an image — the `latest`/`v2`/`v2-YYYYMMDD` tags documented in `modal-images/README.md` and the `modal-image-builds` skill didn't exist anywhere in code. `build_bl1nk_search.py` did publish tags, but hand-typed the version and today's date into 3 separate `built.publish(...)` calls — a rebuild meant manually editing a date string and remembering to keep it consistent across 3 lines.
+
+**Decision:** Added `modal-images/_tags.py` with `publish_versioned(built, name, major)`, which computes the dated tag and publishes all three in one call. Both build scripts now use it and expose a single `MAJOR_VERSION` constant to bump by hand when needed. Fixed `build_bl1nk_rust.py` to actually call `image.build(app)` + publish. Every *consumer* app already pins `:latest`, so this only affects the build scripts — no downstream app needs updating when a new version publishes.
+
+**Consequences:**
+
+- A version bump is a one-line edit in one file; the date is never hand-typed.
+- Any future build script for a new image should reuse this pattern (see the updated `modal-image-builds` skill template) instead of reintroducing hardcoded version/date literals.

@@ -48,6 +48,8 @@ description: >-
 
 Example: `bl1nk-search:v1-20260702`
 
+**Don't hand-type the dated tag or duplicate the version string across `publish()` calls.** In this repo, `modal-images/_tags.py` provides `publish_versioned(built, name, major)`, which publishes all three tags with the date computed at build time. Both `build_bl1nk_rust.py` and `build_bl1nk_search.py` use it — bumping a major version is a one-line change to a `MAJOR_VERSION` constant, not an edit to 3 separate `built.publish(...)` calls. Reuse this pattern (or the module itself, if it's in scope) for any new build script instead of reintroducing hardcoded version/date literals.
+
 ## Service Deployment Pattern
 
 Split build and deploy into separate files:

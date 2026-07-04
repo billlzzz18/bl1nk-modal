@@ -2,15 +2,31 @@
 
 Copy to build_<name>.py and replace placeholders:
 - APP_NAME
-- IMAGE_TAGS
+- IMAGE_NAME / MAJOR_VERSION
 - PACKAGES list
 - TOOLCHAIN commands
+
+If this project builds more than one image, extract the publish_versioned()
+function below into a shared module (see modal-images/_tags.py in this repo
+for a working example) instead of duplicating it per build script.
 """
+
+from datetime import datetime, timezone
 
 import modal
 
 
 APP_NAME = "<app-name>"
+IMAGE_NAME = "<name>"
+MAJOR_VERSION = "v1"  # bump this one line for a new major version; never hand-edit publish() calls
+
+
+def publish_versioned(built, name: str, major: str) -> list[str]:
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    tags = [f"{name}:latest", f"{name}:{major}", f"{name}:{major}-{today}"]
+    for tag in tags:
+        built.publish(tag)
+    return tags
 
 
 app = modal.App.lookup(APP_NAME, create_if_missing=True)
@@ -41,6 +57,4 @@ image = (
 with modal.enable_output():
     built = image.build(app)
 
-built.publish("<name>:latest")
-built.publish("<name>:v1")
-built.publish("<name>:v1-YYYYMMDD")
+publish_versioned(built, IMAGE_NAME, MAJOR_VERSION)
