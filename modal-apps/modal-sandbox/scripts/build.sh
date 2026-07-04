@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve paths relative to this script's location, not a hardcoded clone
+# path — works on any OS (Linux, macOS, Termux, WSL) regardless of where
+# the repo lives, matching the SCRIPT_DIR pattern already used in
+# modal-apps/modal-agy/run.sh.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SANDBOX_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SANDBOX_DIR/../.." && pwd)"
+IMAGES_DIR="$REPO_ROOT/modal-images"
+
 echo "== Building Modal Sandbox Image v2.1 =="
 echo ""
 
@@ -8,8 +17,7 @@ echo ""
 echo "Checking bl1nk-rust image..."
 if ! modal image list 2>/dev/null | grep -q "bl1nk-rust"; then
     echo "bl1nk-rust image not found. Building it first..."
-    cd /data/data/com.termux/files/home/modal/modal-images
-    modal run build_bl1nk_rust.py
+    (cd "$IMAGES_DIR" && modal run build_bl1nk_rust.py)
 else
     echo "bl1nk-rust image found."
 fi
@@ -18,7 +26,7 @@ echo ""
 echo "Building modal-sandbox..."
 
 # Build the sandbox image
-modal run /data/data/com.termux/files/home/modal/modal-apps/modal-sandbox/modal_app.py --build
+modal run "$SANDBOX_DIR/modal_app.py" --build
 
 echo ""
 echo "Build completed."
