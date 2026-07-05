@@ -4,7 +4,7 @@ from _tags import publish_versioned
 
 APP_NAME = "image-builds"
 IMAGE_NAME = "bl1nk-rust"
-MAJOR_VERSION = "v2"  # bump this one line when the toolchain changes enough to warrant it
+MAJOR_VERSION = "v2.2-20260705"  # bump this one line when the toolchain changes enough to warrant it
 
 app = modal.App.lookup(APP_NAME, create_if_missing=True)
 

@@ -3,7 +3,7 @@ import modal
 from _tags import publish_versioned
 
 APP_NAME = "bl1nk-search"
-MAJOR_VERSION = "v1"  # bump this one line when the model/runtime stack changes enough to warrant it
+MAJOR_VERSION = "v2.2-20260705"  # bump this one line when the model/runtime stack changes enough to warrant it
 
 app = modal.App.lookup(APP_NAME, create_if_missing=True)
 

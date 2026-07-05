@@ -1,158 +1,49 @@
-# Rust Style Guide
+# Rust Code Style Guide (Extended)
 
-Rust conventions following the standard Rust API guidelines, `rustfmt`, and `clippy` defaults.
+## 1. General Principles
+- **Safety First:** หลีกเลี่ยงการใช้ `unsafe` block ยกเว้นกรณีที่จำเป็นจริงๆ สำหรับ PyO3 FFI และต้องมีการตรวจสอบอย่างเข้มงวด
+- **Idiomatic Rust:** ใช้คำสั่งที่ตรงตามมาตรฐาน Rust (e.g., use `match` instead of heavy `if-else`, use `Iterators`)
+- **Ownership & Borrowing:** ทำความเข้าใจเรื่อง ownership อย่างดีเพื่อลดการ `.clone()` โดยไม่จำเป็น
 
-## Naming Conventions
+## 2. Naming Conventions
+- **Files/Modules:** `snake_case.rs`
+- **Structs/Enums/Traits:** `PascalCase`
+- **Functions/Variables/Methods:** `snake_case`
+- **Constants/Statics:** `SCREAMING_SNAKE_CASE`
 
-```rust
-// Variables and functions: snake_case
-let user_name = "John";
-fn calculate_total(items: &[Item]) -> u32 { 0 }
-
-// Constants and statics: SCREAMING_SNAKE_CASE
-const MAX_CONNECTIONS: u32 = 100;
-static DEFAULT_TIMEOUT: u32 = 30;
-
-// Types, traits, enums: PascalCase
-struct UserAccount { id: u32 }
-trait Repository { fn find(&self, id: u32) -> Option<Item>; }
-enum Status { Pending, Active, Completed }
-
-// Modules: snake_case
-mod file_detector;
-
-// Crates: kebab-case in Cargo.toml, snake_case when referenced in code
-// Cargo.toml: name = "sovereign-engine"
-// code:        use sovereign_engine::...;
-```
-
-## Formatting
-
-Enforced by `cargo fmt` — don't hand-format, run the tool. This repo's `.pre-commit-config.yaml` runs `cargo fmt --check` on any change to `modal-apps/modal-opencode/engine/Cargo.toml`.
-
-```bash
-cargo fmt          # apply formatting
-cargo fmt --check  # verify without writing (CI mode)
-```
-
-## Linting
-
-`cargo clippy` catches idiom violations `rustfmt` doesn't (e.g. unnecessary clones, `vec![]` after `Vec::new()` + pushes, `&Vec<T>` instead of `&[T]`).
-
-```bash
-cargo clippy --all-targets
-cargo clippy --fix --lib -p <crate>   # apply the safe auto-fixes
-```
-
-## Ownership and Borrowing
+## 3. Error Handling (PyO3 Integration)
+- **No Panics:** ห้ามใช้ `unwrap()` หรือ `expect()` ใน Production code ให้ใช้ `Result<T, E>` และ `Option<T>` เสมอ
+- **Result Mapping:** ฟังก์ชันที่ export ไป Python ต้องคืนค่าเป็น `PyResult<T>`
+- **Custom Exceptions:** ใช้ `create_exception!` สำหรับนิยาม Error ที่เฉพาะเจาะจงของโปรเจกต์
+- **Automatic Conversion:** Implement `From<MyError> for PyErr` เพื่อให้ Rust `?` operator ทำงานร่วมกับ Python exception ได้โดยอัตโนมัติ
 
 ```rust
-// Prefer borrowing over cloning when the callee doesn't need ownership
-fn detect(changed_files: &[String]) -> Vec<String> { vec![] }
-
-// Take &str over &String, &[T] over &Vec<T> in function signatures
-fn process(text: &str) {}          // good
-fn process(text: &String) {}       // clippy::ptr_arg warning
-
-// Return owned values from constructors/builders
-impl Detector {
-    pub fn new() -> Self { Self { patterns: Default::default() } }
-}
-```
-
-## Error Handling
-
-```rust
-// Library code: Result<T, E>, never panic on recoverable errors
-fn parse_config(raw: &str) -> Result<Config, ConfigError> {
-    serde_json::from_str(raw).map_err(ConfigError::from)
-}
-
-// unwrap()/expect() are fine for invariants proven at construction
-// (e.g. a hardcoded regex that is known to compile), not for I/O or user input
-let re = Regex::new(r"^\d+$").unwrap(); // safe: literal pattern, always compiles
-
-// Propagate with `?`, not manual match-and-return
-fn read_and_parse(path: &Path) -> Result<Config, AppError> {
-    let raw = std::fs::read_to_string(path)?;
-    Ok(parse_config(&raw)?)
-}
-```
-
-## Testing
-
-Unit tests live in a `#[cfg(test)] mod tests` block at the bottom of the file they test, using `use super::*;` to pull in the parent module's items — this is the pattern already used throughout `sovereign_engine`.
-
-```rust
-pub struct SizeCalculator;
-
-impl SizeCalculator {
-    pub fn calculate_pr_size(additions: i32, deletions: i32) -> String {
-        // ...
-        # String::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_calculate_pr_size_boundaries() {
-        assert_eq!(SizeCalculator::calculate_pr_size(30, 20), "xs");
+// ตัวอย่างการทำ Error Mapping
+impl From<EngineError> for PyErr {
+    fn from(err: EngineError) -> PyErr {
+        PyValueError::new_err(err.to_string())
     }
 }
 ```
 
-Run with:
+## 4. Performance & Concurrency
+- **GIL Management:** สำหรับฟังก์ชันที่ใช้ CPU หนัก (Heavy Computation) ให้ใช้ `py.allow_threads(|| { ... })` เพื่อคลาย Python Global Interpreter Lock (GIL) ให้ Thread อื่นทำงานได้
+- **Zero-Copy:** พยายามใช้ `&[u8]` หรือ `Bound<'py, PyArray>` แทนการสร้างสำเนาข้อมูลขนาดใหญ่ระหว่าง Python และ Rust
 
-```bash
-cargo test          # all tests
-cargo test -q       # quiet output
-cargo test <name>   # filter by test name substring
-```
+## 5. Documentation
+- ใช้ `///` สำหรับ Documentation comments เหนือฟังก์ชันและ Struct
+- ทุกฟังก์ชันที่เป็น Public (รวมถึงที่ export ไป Python) ต้องมีคำอธิบายอย่างน้อย 1 บรรทัด
+- ให้ใส่ตัวอย่างการใช้งานใน `examples` folder ถ้า logic มีความซับซ้อน
 
-## pyo3 Extension Crates
+## 6. Testing (TDD)
+- **Unit Tests:** เขียนไว้ในไฟล์เดียวกับโค้ดภายใต้โมดูล `#[cfg(test)] mod tests`
+- **Integration Tests:** เขียนไว้ในโฟลเดอร์ `tests/` ที่ root ของ engine crate
+- **Property-based Testing:** ใช้ `proptest` สำหรับ Logic ที่สำคัญ (เช่น label parsing) เพื่อทดสอบ edge cases
 
-`sovereign_engine` is a `cdylib` pyo3 extension module (Python↔Rust bridge). Notes specific to this pattern:
-
-- `Cargo.toml` sets `crate-type = ["cdylib"]` and depends on `pyo3` with the `extension-module` feature.
-- `#[pyfunction]` / `#[pymodule]` wrap plain Rust functions — write and test the underlying logic as ordinary Rust first, then expose it.
-- `cargo test` works fine for unit tests even with `extension-module` enabled in this repo's current setup — verified against the installed toolchain. If a future pyo3 upgrade breaks `cargo test` with a linker error, the standard fix is to make `extension-module` an opt-in Cargo feature (`default = ["extension-module"]`) and run tests with `cargo test --no-default-features`.
-
-## Common Patterns
-
-### Newtype / marker structs for stateless logic
-
-```rust
-// A struct with no fields, used purely to namespace associated functions
-pub struct FileDetector;
-
-impl FileDetector {
-    pub fn detect(changed_files: &[String]) -> Vec<String> {
-        let mut detected = std::collections::HashSet::new();
-        // ...
-        detected.into_iter().collect()
-    }
-}
-```
-
-### Builder-free construction with `HashMap`/`HashSet` initialization
-
-```rust
-use std::collections::HashMap;
-
-pub struct Detector {
-    patterns: HashMap<String, Vec<(String, regex::Regex)>>,
-}
-
-impl Detector {
-    pub fn new() -> Self {
-        let mut patterns = HashMap::new();
-        patterns.insert("type".to_string(), vec![/* ... */]);
-        Self { patterns }
-    }
-}
-```
-
-Prefer `vec![...]` literals over `Vec::new()` + repeated `.push()` calls when the values are known upfront — `clippy::vec_init_then_push` flags the latter.
+## 7. Auto-Labeling & State Machine Logic
+- **Exclusive Label Groups:** ออกแบบ Logic ให้รองรับการทำงานแบบ Exclusive ภายในกลุ่ม (e.g., หนึ่ง Issue มีได้เพียงหนึ่ง `state:*` label เท่านั้น)
+- **Label Normalization:** Rust Engine ต้องสามารถลบ Label ที่เก่าหรือขัดแย้งกันออกได้โดยอัตโนมัติ
+- **Validation Rules:**
+  - `agent:*` ต้องมีเสมอหาก `state:*` ไม่ใช่ `backlog`
+  - `status:blocked` จะถูกเพิ่มอัตโนมัติหากตรวจพบ label `blocking` หรือ `conflict`
+- **Output Format:** ส่งคืนรายการ Label เป็น `Vec<String>` ที่เรียงลำดับและทำความสะอาดแล้ว (Sanitized) เพื่อให้ Python นำไป `PUT` ลง GitHub API ได้ทันที
