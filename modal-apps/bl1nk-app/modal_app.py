@@ -11,13 +11,20 @@ from pydantic import BaseModel
 import modal
 
 APP_NAME = "bl1nk"
-image = modal.Image.debian_slim(python_version="3.12")
-
-# Hermes install script is executed during image build
-image = image.run_commands(
-    "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash || "
-    "echo 'Hermes install script failed; using fallback.' && "
-    "curl -fsSL https://hermes-agent.nousresearch.com/docs > /tmp/hermes-docs.html || true",
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install(
+        "fastapi>=0.116.0",
+        "uvicorn[standard]>=0.35.0",
+        "pydantic>=2.11.7",
+        "python-multipart>=0.0.20",
+        "modal>=1.1.4",
+    )
+    .run_commands(
+        "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash || "
+        "echo 'Hermes install script failed; using fallback.' && "
+        "curl -fsSL https://hermes-agent.nousresearch.com/docs > /tmp/hermes-docs.html || true",
+    )
 )
 
 app = modal.App(APP_NAME)
@@ -39,6 +46,7 @@ def _make_sandbox_image() -> modal.Image:
             "curl", "git", "ca-certificates", "build-essential",
             "pkg-config", "libssl-dev", "zip", "unzip",
         )
+        .pip_install("modal>=1.1.4")
         .run_commands(
             "curl https://sh.rustup.rs -sSf | sh -s -- -y",
             "ln -sf /root/.cargo/bin/* /usr/local/bin/",
@@ -63,10 +71,9 @@ def _make_sandbox_image() -> modal.Image:
             "node --version",
             "npm --version",
             "bun --version",
-        "python3 -m pip install modal"
-        "curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar -xz"
-        "mv rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg"
-        "rg --version || true"
+            "curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar -xz",
+            "mv rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg",
+            "rg --version || true",
         )
         .env({
             "HOME": "/home/workspace",
