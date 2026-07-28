@@ -18,6 +18,7 @@ import uuid
 from typing import Any, Optional
 
 import faiss
+import httpx
 import numpy as np
 import torch
 from fastapi import FastAPI, Header, HTTPException
@@ -29,10 +30,17 @@ from transformers import AutoModel, AutoTokenizer
 
 # Model registry — users can switch via POST /models/select
 EMBED_MODELS: dict[str, dict] = {
-    "minilm":  {"name": "sentence-transformers/all-MiniLM-L6-v2", "dim": 384,  "desc": "Fast, 22MB"},
-    "bge-small-en": {"name": "BAAI/bge-small-en-v1.5",            "dim": 384,  "desc": "Good balance"},
-    "bge-base-en":  {"name": "BAAI/bge-base-en-v1.5",             "dim": 768,  "desc": "Higher quality"},
-    "qwen3-0.6b":   {"name": "Qwen/Qwen3-Embedding-0.6B",        "dim": 1024, "desc": "Best quality", "trust_remote_code": True},
+    # ── Local ONNX-optimized (faster than raw HF) ──
+    "minilm":  {"type": "local", "name": "sentence-transformers/all-MiniLM-L6-v2", "dim": 384,  "desc": "Fast, 22MB (ONNX)"},
+    "bge-small-en": {"type": "local", "name": "BAAI/bge-small-en-v1.5",            "dim": 384,  "desc": "Good balance (ONNX)"},
+    "bge-base-en":  {"type": "local", "name": "BAAI/bge-base-en-v1.5",             "dim": 768,  "desc": "Higher quality (ONNX)"},
+    "qwen3-0.6b":   {"type": "local", "name": "Qwen/Qwen3-Embedding-0.6B",        "dim": 1024, "desc": "Best quality (HF)", "trust_remote_code": True},
+    # ── API models (requires API keys) ──
+    "openai-3-small": {"type": "api", "name": "text-embedding-3-small", "dim": 512, "provider": "openai", "desc": "OpenAI text-embedding-3-small, dim 512"},
+    "openai-3-large": {"type": "api", "name": "text-embedding-3-large", "dim": 256, "provider": "openai", "desc": "OpenAI text-embedding-3-large, dim 256"},
+    "gemini-004":     {"type": "api", "name": "text-embedding-004",    "dim": 768, "provider": "gemini", "desc": "Gemini text-embedding-004"},
+    "voyage-code-3":  {"type": "api", "name": "voyage-code-3",         "dim": 1024, "provider": "voyage", "desc": "Voyage code-3"},
+    "voyage-code-4":  {"type": "api", "name": "voyage-code-4",         "dim": 1024, "provider": "voyage", "desc": "Voyage code-4"},
 }
 RERANK_MODELS: dict[str, dict] = {
     "bge-m3":    {"name": "BAAI/bge-reranker-v2-m3",         "desc": "Cross-encoder"},
@@ -112,7 +120,7 @@ class ProxySearchRequest(BaseModel):
     max_content_length: int = 500
 
 
-# ── Core: models (global, lazy-loaded under lock) ────────────
+## Core: models (global, lazy-loaded under lock) ──
 
 _tokenizer = None
 _embed_model = None
@@ -123,17 +131,42 @@ _metadata: dict[str, dict] = {}
 _ids: list[str] = []
 
 
+def _current_embed_type() -> str:
+    return EMBED_MODELS[_active_embed_key].get("type", "local")
+
+
 def get_models():
+    """Load or verify models for current selection.
+    API models don't load anything — just validate config.
+    """
     global _tokenizer, _embed_model, _rerank_tokenizer, _rerank_model
+    cfg = EMBED_MODELS[_active_embed_key]
+
+    # API models: no local loading needed
+    if cfg.get("type") == "api":
+        _tokenizer = None
+        _embed_model = None
+        if _rerank_tokenizer is None:
+            _load_reranker()
+        return
+
+    # Local HF model: load if not loaded or model changed
     if _tokenizer is not None:
         return
-    embed_cfg = EMBED_MODELS[_active_embed_key]
-    rerank_cfg = RERANK_MODELS[_active_rerank_key]
-    _tokenizer = AutoTokenizer.from_pretrained(embed_cfg["name"], trust_remote_code=embed_cfg.get("trust_remote_code", False))
-    _embed_model = AutoModel.from_pretrained(embed_cfg["name"], trust_remote_code=embed_cfg.get("trust_remote_code", False))
+
+    _tokenizer = AutoTokenizer.from_pretrained(
+        cfg["name"], trust_remote_code=cfg.get("trust_remote_code", False))
+    _embed_model = AutoModel.from_pretrained(
+        cfg["name"], trust_remote_code=cfg.get("trust_remote_code", False))
     _embed_model.eval()
     if torch.cuda.is_available():
         _embed_model = _embed_model.cuda()
+    _load_reranker()
+
+
+def _load_reranker():
+    global _rerank_tokenizer, _rerank_model
+    rerank_cfg = RERANK_MODELS[_active_rerank_key]
     _rerank_tokenizer = AutoTokenizer.from_pretrained(rerank_cfg["name"])
     _rerank_model = AutoModel.from_pretrained(rerank_cfg["name"])
     _rerank_model.eval()
@@ -142,6 +175,14 @@ def get_models():
 
 
 def embed(text: str) -> np.ndarray:
+    """Dispatch to local or API embedder based on active model type."""
+    cfg = EMBED_MODELS[_active_embed_key]
+    if cfg.get("type") == "api":
+        return _embed_api(text, cfg)
+    return _embed_local(text)
+
+
+def _embed_local(text: str) -> np.ndarray:
     inputs = _tokenizer(text, return_tensors="pt", truncation=True, max_length=8192, padding=True)
     if torch.cuda.is_available():
         inputs = {k: v.cuda() for k, v in inputs.items()}
@@ -152,7 +193,72 @@ def embed(text: str) -> np.ndarray:
     return vec.cpu().numpy().astype("float32")
 
 
+def _embed_api(text: str, cfg: dict) -> np.ndarray:
+    """Embed via external API (OpenAI / Gemini / Voyage)."""
+    provider = cfg["provider"]
+    if provider == "openai":
+        return _embed_openai(text, cfg)
+    elif provider == "gemini":
+        return _embed_gemini(text, cfg)
+    elif provider == "voyage":
+        return _embed_voyage(text, cfg)
+    raise ValueError(f"Unknown API provider: {provider}")
+
+
+# ── API embedders ────────────────────────────────────────────
+
+_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
+_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+_VOYAGE_KEY = os.getenv("VOYAGE_API_KEY", "")
+
+
+def _embed_openai(text: str, cfg: dict) -> np.ndarray:
+    key = _OPENAI_KEY or os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    resp = httpx.post(
+        "https://api.openai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"input": text, "model": cfg["name"], "dimensions": cfg["dim"]},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()["data"][0]["embedding"]
+    return np.array(data, dtype="float32").reshape(1, -1)
+
+
+def _embed_gemini(text: str, cfg: dict) -> np.ndarray:
+    key = _GEMINI_KEY or os.getenv("GEMINI_API_KEY", "")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY not set")
+    resp = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1/models/{cfg['name']}:embedContent?key={key}",
+        headers={"Content-Type": "application/json"},
+        json={"model": f"models/{cfg['name']}", "content": {"parts": [{"text": text}]}},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()["embedding"]["values"]
+    return np.array(data, dtype="float32").reshape(1, -1)
+
+
+def _embed_voyage(text: str, cfg: dict) -> np.ndarray:
+    key = _VOYAGE_KEY or os.getenv("VOYAGE_API_KEY", "")
+    if not key:
+        raise RuntimeError("VOYAGE_API_KEY not set")
+    resp = httpx.post(
+        "https://api.voyageai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"input": text, "model": cfg["name"]},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()["data"][0]["embedding"]
+    return np.array(data, dtype="float32").reshape(1, -1)
+
+
 def rerank(query: str, docs: list[str]) -> list[float]:
+    """Score documents by relevance to query using cross-encoder."""
     if not docs:
         return []
     pairs = [[query, d] for d in docs]
