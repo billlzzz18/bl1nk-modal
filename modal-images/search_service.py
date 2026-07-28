@@ -22,6 +22,8 @@ import hashlib
 import httpx
 import math
 import numpy as np
+import os
+from pathlib import Path
 import torch
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -65,7 +67,46 @@ _deleted_ids: set[str] = set()
 app = FastAPI(title="bl1nk-search")
 
 
-# ── Auth ─────────────────────────────────────────────────────
+TMP_STORE = os.environ.get("TMPDIR", "/tmp") + "/bl1nk-search"
+
+
+def _ensure_tmp_store():
+    os.makedirs(TMP_STORE, exist_ok=True)
+
+
+def _write_content(hash_key: str, content: str):
+    """Write raw content to tmp file (not in memory)."""
+    _ensure_tmp_store()
+    Path(os.path.join(TMP_STORE, f"{hash_key}.txt")).write_text(content, encoding="utf-8")
+
+
+def _read_content(hash_key: str) -> str:
+    """Read raw content from tmp file."""
+    fp = os.path.join(TMP_STORE, f"{hash_key}.txt")
+    try:
+        return Path(fp).read_text(encoding="utf-8", errors="replace")
+    except (FileNotFoundError, OSError):
+        return ""
+
+
+def _remove_content(hash_key: str):
+    """Remove tmp content file."""
+    fp = os.path.join(TMP_STORE, f"{hash_key}.txt")
+    try:
+        os.remove(fp)
+    except OSError:
+        pass
+
+
+def _content(meta: dict) -> str:
+    """Get raw content from tmp store using hash field."""
+    return _read_content(meta.get("hash", ""))
+
+
+def _content_truncated(meta: dict, max_len: int = 500) -> str:
+    """Get content from tmp, truncated."""
+    c = _content(meta)
+    return c[:max_len] + "..." if len(c) > max_len else c
 
 def assert_token(authorization: Optional[str]):
     if not API_TOKEN:
@@ -133,6 +174,7 @@ class IndexResult(BaseModel):
     id: str
     trace_id: str
     error: Optional[Error] = None
+    note: Optional[str] = None
 
 
 class SearchHit(BaseModel):
@@ -228,7 +270,7 @@ def _ensure_bm25() -> None:
     """Rebuild BM25 index from current metadata."""
     global _bm25
     with _index_lock:
-        alive = [(sid, (_metadata.get(sid) or {}).get("content", ""))
+        alive = [(sid, _content(_metadata.get(sid, {})))
                  for sid in _ids if sid not in _deleted_ids]
         if not alive:
             _bm25 = _BM25Index()
@@ -449,7 +491,6 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
         content_hash = hashlib.sha256(payload.content.encode()).hexdigest()[:16]
         vec = embed(payload.content)
         with _index_lock:
-            # idempotent: skip if same hash already indexed
             for sid in _ids:
                 if sid not in _deleted_ids and _metadata.get(sid, {}).get("hash") == content_hash:
                     return IndexResult(success=True, id=payload.id, trace_id=tid,
@@ -458,7 +499,9 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
                 _deleted_ids.add(payload.id)
             _index.add(vec)
             _ids.append(payload.id)
-            # Lightweight metadata — no raw content stored
+            # Write raw content to tmp (not in memory)
+            _write_content(content_hash, payload.content)
+            # Lightweight metadata in memory
             meta_record = {
                 "hash": content_hash,
                 "source_type": payload.source_type,
@@ -520,8 +563,8 @@ def query(request: dict, authorization: Optional[str] = Header(None)):
                 meta = _metadata.get(doc_id, {})
                 if source_type and meta.get("source_type") != source_type:
                     continue
-                hits.append({"id": doc_id, "score": float(scores[0][i]), "content": meta.get("content", "")})
-                texts.append(meta.get("content", ""))
+                hits.append({"id": doc_id, "score": float(scores[0][i]), "content": _content(meta)})
+                texts.append(_content(meta))
                 if len(hits) >= top_k:
                     break
         finally:
@@ -629,7 +672,7 @@ def kb_search(request: dict, authorization: Optional[str] = Header(None)):
             matches = [(sid, _metadata.get(sid, {}).get("timestamp", 0))
                        for sid in kb_doc_ids]
             matches.sort(key=lambda x: -x[1])
-            hits = [{"id": sid, "score": 0, "content": (_metadata.get(sid, {}).get("content") or "")[:300]}
+            hits = [{"id": sid, "score": 0, "content": _content_truncated(_metadata.get(sid, {}), 300)}
                     for sid, _ in matches[:top_k]]
             latency = int((time.time() - start) * 1000)
             return {"results": hits, "meta": {"latency_ms": latency, "empty": False, "trace_id": tid}}
@@ -647,7 +690,7 @@ def kb_search(request: dict, authorization: Optional[str] = Header(None)):
                 continue
             meta = _metadata.get(sid, {})
             hits.append({"id": sid, "score": float(scores[0][i]),
-                         "content": (meta.get("content") or "")[:500]})
+                         "content": _content_truncated(meta, 500)})
             if len(hits) >= top_k:
                 break
 
@@ -689,7 +732,7 @@ def fts_search(request: dict, authorization: Optional[str] = Header(None)):
         if source_type and meta.get("source_type") != source_type:
             continue
         hits.append({"id": doc_id, "score": round(score, 4),
-                     "content": (meta.get("content") or "")[:500]})
+                     "content": _content_truncated(meta, 500)})
     latency = int((time.time() - start) * 1000)
     return {
         "results": hits,
@@ -737,7 +780,7 @@ def hybrid_search(request: dict, authorization: Optional[str] = Header(None)):
         if source_type and meta.get("source_type") != source_type:
             continue
         combined.append({"id": doc_id, "score": round(total, 4),
-                         "content": (meta.get("content") or "")[:500]})
+                         "content": _content_truncated(meta, 500)})
 
     combined.sort(key=lambda x: -x["score"])
     latency = int((time.time() - start) * 1000)
@@ -895,7 +938,7 @@ def select_docs(request: dict, authorization: Optional[str] = Header(None)):
         "limit": limit,
         "results": [
             {"id": sid, "source_type": m.get("source_type"),
-             "score": 0, "content": (m.get("content") or "")[:300],
+             "score": 0, "content": _content_truncated(m, 300),
              "metadata": {k: v for k, v in m.items() if k != "content"}}
             for _, sid, m in page
         ],
@@ -938,7 +981,7 @@ def graph_related(request: dict, authorization: Optional[str] = Header(None)):
             "id": sid,
             "source_type": meta.get("source_type"),
             "score": score,
-            "content": (meta.get("content", "") or "")[:200] + "..." if meta.get("content") and len(meta["content"]) > 200 else (meta.get("content", "") or ""),
+            "content": _content_truncated(meta, 200),
         })
     return {"source_id": doc_id, "related": nodes, "total": len(nodes)}
 
@@ -982,7 +1025,7 @@ def update(request: dict, authorization: Optional[str] = Header(None)):
                     "error": {"code": "not_found", "message": "id not found"}}
         meta = _metadata[doc_id]
         if request.get("content") is not None:
-            meta["content"] = request["content"]
+            _write_content(meta.get("hash", ""), request.get("content", ""))
         for k in ("source_type", "path", "repo", "session_id", "kb_id", "tags", "timestamp", "version"):
             if k in request:
                 meta[k] = request[k]
@@ -1028,7 +1071,7 @@ def daemon_compact(authorization: Optional[str] = Header(None)):
     tid = str(uuid.uuid4())
 
     with _index_lock:
-        alive = [(sid, _metadata.get(sid, {}).get("content", ""))
+        alive = [(sid, _content(_metadata.get(sid, {})))
                  for sid in _ids if sid not in _deleted_ids]
         removed = len(_ids) - len(alive)
 

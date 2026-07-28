@@ -1,3 +1,4 @@
+import hashlib
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -137,12 +138,16 @@ def test_update_returns_not_found_for_unknown_id():
 
 
 def test_update_modifies_existing_content():
-    search_service._metadata["doc-1"] = {"content": "old", "source_type": "doc"}
+    content_hash = hashlib.sha256(b"old").hexdigest()[:16]
+    search_service._metadata["doc-1"] = {"hash": content_hash, "source_type": "doc"}
+    search_service._write_content(content_hash, "old")
 
     resp = client.post("/update", json={"id": "doc-1", "source_type": "doc", "content": "new"})
 
     assert resp.json()["success"] is True
-    assert search_service._metadata["doc-1"]["content"] == "new"
+    # Content now stored in tmp, not _metadata
+    stored = search_service._read_content(content_hash)
+    assert stored == "new"
 
 
 def test_shutdown_resets_global_state(monkeypatch):
