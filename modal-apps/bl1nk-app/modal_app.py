@@ -30,6 +30,7 @@ from api_models import (
     TaskStatus,
 )
 from dispatch import dispatch
+from sandbox_store import SandboxStore
 
 APP_NAME = "bl1nk"
 image = modal.Image.debian_slim(python_version="3.12")
@@ -48,6 +49,9 @@ logger = logging.getLogger("uvicorn")
 
 # in-memory task store (replace with DB later)
 _tasks: dict[str, TaskStatus] = {}
+
+# sandbox store — one seam for all sandbox operations
+sandbox_store = SandboxStore()
 
 
 # ── GET /health ──────────────────────────────────────────────
@@ -103,47 +107,44 @@ async def get_task(task_id: str):
 
 @api.post("/api/v1/sandboxes", status_code=201)
 async def create_sandbox(req: SandboxCreateRequest):
-    return {
-        "sandbox_id": f"sb_{datetime.now(timezone.utc).strftime('%H%M%S%f')}",
-        "status": "running",
-        "image": req.image,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    return sandbox_store.create(
+        image=req.image,
+        cmd=req.cmd,
+        cpu=req.cpu,
+        memory=req.memory,
+        timeout=req.timeout,
+        env=req.env,
+    )
 
 
 # ── GET /api/v1/sandboxes/{sandbox_id} ───────────────────────
 
 @api.get("/api/v1/sandboxes/{sandbox_id}")
 async def get_sandbox(sandbox_id: str):
-    if not sandbox_id.startswith("sb_"):
+    info = sandbox_store.get(sandbox_id)
+    if info is None:
         raise HTTPException(status_code=404, detail="sandbox not found")
-    return {
-        "sandbox_id": sandbox_id,
-        "status": "running",
-        "image": "bl1nk-rust:latest",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "uptime_seconds": 0,
-    }
+    return info
 
 
 # ── DELETE /api/v1/sandboxes/{sandbox_id} ────────────────────
 
 @api.delete("/api/v1/sandboxes/{sandbox_id}")
 async def delete_sandbox(sandbox_id: str):
-    return {"sandbox_id": sandbox_id, "status": "terminated"}
+    try:
+        return sandbox_store.delete(sandbox_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ── POST /api/v1/sandboxes/{sandbox_id}/exec ─────────────────
 
 @api.post("/api/v1/sandboxes/{sandbox_id}/exec")
 async def exec_in_sandbox(sandbox_id: str, req: ExecRequest):
-    return {
-        "sandbox_id": sandbox_id,
-        "exit_code": 0,
-        "stdout": f"stub: would run {req.cmd}",
-        "stderr": "",
-        "duration_ms": 0,
-    }
+    try:
+        return sandbox_store.exec(sandbox_id, req.cmd)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ── GET /api/v1/sandboxes/{sandbox_id}/files ─────────────────
@@ -153,13 +154,10 @@ async def list_sandbox_files(
     sandbox_id: str,
     path: str = Query("/", description="directory to list"),
 ):
-    return {
-        "sandbox_id": sandbox_id,
-        "path": path,
-        "files": [
-            {"name": ".", "type": "dir", "size": 4096, "mode": "drwxr-xr-x"},
-        ],
-    }
+    try:
+        return sandbox_store.list_files(sandbox_id, path)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ── Modal entrypoints ────────────────────────────────────────
