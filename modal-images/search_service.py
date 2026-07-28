@@ -938,32 +938,39 @@ def admin_compress(authorization: Optional[str] = Header(None)):
     """Rebuild FAISS index: remove soft-deleted vectors, reclaim space."""
     assert_token(authorization)
     tid = str(uuid.uuid4())
+    global _bm25
 
     with _index_lock:
-        kept_indices = [i for i, sid in enumerate(_ids) if sid not in _deleted_ids]
-        removed = len(_ids) - len(kept_indices)
-        if not kept_indices:
-            # Nothing to keep — reset
+        alive = [(sid, _metadata.get(sid, {}).get("content", ""))
+                 for sid in _ids if sid not in _deleted_ids]
+        removed = len(_ids) - len(alive)
+
+        if not alive:
             _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
             _ids.clear()
             _deleted_ids.clear()
+            _bm25 = None
             return {"success": True, "trace_id": tid, "removed": removed, "remaining": 0}
 
-        # Extract kept vectors by direct FAISS index access
-        old_index = _index
+        get_models()
+        new_ids: list[str] = []
         new_index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
-        try:
-            # FAISS doesn't support individual vector extraction directly.
-            # We reconstruct by re-indexing from metadata content.
-            # This is slow — run as a cron (daemon), not per-request.
-            pass  # placeholder — full rebuild through re-indexing is done in daemon
-        except Exception:
-            pass
-        _ids = [sid for i, sid in enumerate(_ids) if sid not in _deleted_ids]
-        _deleted_ids.clear()
+        re_embedded = 0
+        for sid, content in alive:
+            if not content or not content.strip():
+                continue
+            vec = embed(content)
+            new_index.add(vec)
+            new_ids.append(sid)
+            re_embedded += 1
 
-    return {"success": True, "trace_id": tid, "removed": removed, "remaining": len(_ids),
-            "note": "FAISS index rebuild deferred to daemon (POST /daemon/compact)"}
+        _index = new_index
+        _ids = new_ids
+        _deleted_ids.clear()
+        _bm25 = None
+
+    return {"success": True, "trace_id": tid, "removed": removed,
+            "re_embedded": re_embedded, "remaining": len(_ids)}
 
 
 # ── Endpoints: daemon (triggered by Modal cron) ──────────────
