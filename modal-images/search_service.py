@@ -32,7 +32,7 @@ EMBED_MODELS: dict[str, dict] = {
     "minilm":  {"name": "sentence-transformers/all-MiniLM-L6-v2", "dim": 384,  "desc": "Fast, 22MB"},
     "bge-small-en": {"name": "BAAI/bge-small-en-v1.5",            "dim": 384,  "desc": "Good balance"},
     "bge-base-en":  {"name": "BAAI/bge-base-en-v1.5",             "dim": 768,  "desc": "Higher quality"},
-    "qwen3-0.6b":   {"name": "Qwen/Qwen3-Embedding-0.6B",        "dim": 1024, "desc": "Best quality"},
+    "qwen3-0.6b":   {"name": "Qwen/Qwen3-Embedding-0.6B",        "dim": 1024, "desc": "Best quality", "trust_remote_code": True},
 }
 RERANK_MODELS: dict[str, dict] = {
     "bge-m3":    {"name": "BAAI/bge-reranker-v2-m3",         "desc": "Cross-encoder"},
@@ -129,8 +129,8 @@ def get_models():
         return
     embed_cfg = EMBED_MODELS[_active_embed_key]
     rerank_cfg = RERANK_MODELS[_active_rerank_key]
-    _tokenizer = AutoTokenizer.from_pretrained(embed_cfg["name"])
-    _embed_model = AutoModel.from_pretrained(embed_cfg["name"])
+    _tokenizer = AutoTokenizer.from_pretrained(embed_cfg["name"], trust_remote_code=embed_cfg.get("trust_remote_code", False))
+    _embed_model = AutoModel.from_pretrained(embed_cfg["name"], trust_remote_code=embed_cfg.get("trust_remote_code", False))
     _embed_model.eval()
     if torch.cuda.is_available():
         _embed_model = _embed_model.cuda()

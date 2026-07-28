@@ -48,14 +48,27 @@ image = (
         "numpy>=1.24",
     )
     .add_local_file("search_service.py", "/home/workspace/search_service.py", copy=True)
-    # ── Pre-download models into image layer ─────────────────
-    # Prevents cold-start model downloads from HuggingFace.
+    # ── Pre-download ALL registered models into image layer ──
+    # search_service.py model registry includes 4 embed + 2 reranker.
+    # All must be cached to avoid cold-start HuggingFace downloads.
     .run_commands(
-        "python3 -c \"from transformers import AutoTokenizer, AutoModel; "
-        "AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2'); "
-        "AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2'); "
-        "AutoTokenizer.from_pretrained('BAAI/bge-reranker-v2-m3'); "
-        "AutoModel.from_pretrained('BAAI/bge-reranker-v2-m3')\"",
+        "python3 -c \""
+        "from transformers import AutoTokenizer, AutoModel; "
+        # Embed models
+        "for m in ["
+        "'sentence-transformers/all-MiniLM-L6-v2',"
+        "'BAAI/bge-small-en-v1.5',"
+        "'BAAI/bge-base-en-v1.5',"
+        "]: AutoTokenizer.from_pretrained(m); AutoModel.from_pretrained(m); "
+        # Qwen needs trust_remote_code
+        "AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-0.6B', trust_remote_code=True); "
+        "AutoModel.from_pretrained('Qwen/Qwen3-Embedding-0.6B', trust_remote_code=True); "
+        # Reranker models
+        "for m in ["
+        "'BAAI/bge-reranker-v2-m3',"
+        "'BAAI/bge-reranker-v2-minicpm',"
+        "]: AutoTokenizer.from_pretrained(m); AutoModel.from_pretrained(m); "
+        "print('All models cached OK')\"",
     )
 )
 
