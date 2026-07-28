@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 import faiss
 import httpx
+import math
 import numpy as np
 import torch
 from fastapi import FastAPI, Header, HTTPException
@@ -129,6 +130,85 @@ _rerank_model = None
 _index: Optional[faiss.IndexFlatIP] = None
 _metadata: dict[str, dict] = {}
 _ids: list[str] = []
+
+# BM25 full-text search index (lazy-built)
+_bm25: Optional["_BM25Index"] = None
+
+
+class _BM25Index:
+    """Simple in-memory BM25 Okapi index — no extra deps, pure stdlib."""
+
+    def __init__(self, k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+        self._doc_ids: list[str] = []
+        self._tokenized: list[list[str]] = []
+        self._avgdl = 0.0
+        self._idf: dict[str, float] = {}
+
+    def build(self, docs: list[tuple[str, str]]) -> None:
+        """Build index from [(doc_id, content), ...]."""
+        self._doc_ids = []
+        self._tokenized = []
+        total_tokens = 0
+        df: dict[str, int] = {}
+
+        for doc_id, content in docs:
+            self._doc_ids.append(doc_id)
+            tokens = self._tokenize(content)
+            self._tokenized.append(tokens)
+            total_tokens += len(tokens)
+            for t in set(tokens):
+                df[t] = df.get(t, 0) + 1
+
+        n = len(self._doc_ids)
+        self._avgdl = total_tokens / max(n, 1)
+
+        # IDF: log((N - df + 0.5) / (df + 0.5))
+        for term, doc_freq in df.items():
+            self._idf[term] = math.log((n - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
+
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        return re.findall(r"[a-zA-Z0-9_#@\-]+", text.lower())
+
+    def search(self, query: str, top_k: int = 10) -> list[tuple[str, float]]:
+        """Return [(doc_id, bm25_score), ...] sorted descending."""
+        q_tokens = self._tokenize(query)
+        if not q_tokens or not self._doc_ids:
+            return []
+
+        scores: list[tuple[int, float]] = []
+        for i, tokens in enumerate(self._tokenized):
+            score = 0.0
+            doc_len = len(tokens)
+            for qt in set(q_tokens):
+                tf = tokens.count(qt)
+                if tf == 0:
+                    continue
+                idf = self._idf.get(qt, 0.0)
+                numerator = tf * (self.k1 + 1)
+                denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / max(self._avgdl, 1))
+                score += idf * numerator / denominator
+            if score > 0:
+                scores.append((i, score))
+
+        scores.sort(key=lambda x: -x[1])
+        return [(self._doc_ids[i], s) for i, s in scores[:top_k]]
+
+
+def _ensure_bm25() -> None:
+    """Rebuild BM25 index from current metadata."""
+    global _bm25
+    with _index_lock:
+        alive = [(sid, (_metadata.get(sid) or {}).get("content", ""))
+                 for sid in _ids if sid not in _deleted_ids]
+        if not alive:
+            _bm25 = _BM25Index()
+            return
+        bm25 = _BM25Index()
+        bm25.build(alive)
+        _bm25 = bm25
 
 
 def _current_embed_type() -> str:
@@ -302,6 +382,7 @@ def root():
         "endpoints": [
             "/health", "/auth/verify", "/index", "/query",
             "/proxy/search", "/graph/related",
+            "/fts/search", "/hybrid/search",
             "/code/search", "/docs/search", "/session/search", "/memory/search",
             "/delete", "/update", "/admin/compress",
         ],
@@ -356,6 +437,8 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
                 "version": payload.metadata.version,
                 "content": payload.content,
             }
+        global _bm25
+        _bm25 = None  # invalidate BM25 cache
         return IndexResult(success=True, id=payload.id, trace_id=tid)
     except Exception as e:
         return IndexResult(success=False, id=payload.id, trace_id=tid,
@@ -435,6 +518,87 @@ def session_search(request: dict, authorization: Optional[str] = Header(None)):
 def memory_search(request: dict, authorization: Optional[str] = Header(None)):
     request["source_type"] = "memory"
     return query(request, authorization)
+
+
+# ── Endpoints: FTS / Hybrid search (BM25 full-text) ─────────
+
+@app.post("/fts/search")
+def fts_search(request: dict, authorization: Optional[str] = Header(None)):
+    """Pure full-text (BM25) keyword search — no vector similarity."""
+    assert_token(authorization)
+    query_str = request.get("query", "")
+    top_k = min(request.get("top_k", 10), 100)
+    source_type = request.get("source_type")
+
+    if _bm25 is None:
+        _ensure_bm25()
+    if _bm25 is None:
+        return {"results": [], "meta": {"latency_ms": 0, "empty": True, "trace_id": str(uuid.uuid4())}}
+
+    start = time.time()
+    results = _bm25.search(query_str, top_k)
+    hits = []
+    for doc_id, score in results:
+        meta = _metadata.get(doc_id, {})
+        if source_type and meta.get("source_type") != source_type:
+            continue
+        hits.append({"id": doc_id, "score": round(score, 4),
+                     "content": (meta.get("content") or "")[:500]})
+    latency = int((time.time() - start) * 1000)
+    return {
+        "results": hits,
+        "meta": {"latency_ms": latency, "empty": len(hits) == 0, "trace_id": str(uuid.uuid4())},
+    }
+
+
+@app.post("/hybrid/search")
+def hybrid_search(request: dict, authorization: Optional[str] = Header(None)):
+    """Hybrid search: BM25 + vector scores combined (weighted sum).
+
+    Default weights: 0.3 BM25 + 0.7 vector. Adjust via `alpha` (BM25 weight).
+    """
+    assert_token(authorization)
+    query_str = request.get("query", "")
+    top_k = min(request.get("top_k", 10), 100)
+    source_type = request.get("source_type")
+    alpha = request.get("alpha", 0.3)  # BM25 weight, vector weight = 1 - alpha
+
+    if not query_str.strip():
+        return {"results": [], "meta": {"latency_ms": 0, "empty": True, "trace_id": str(uuid.uuid4())}}
+
+    start = time.time()
+    tid = str(uuid.uuid4())
+
+    # 1. Get vector results
+    vec_resp = query({"query": query_str, "source_type": source_type, "top_k": top_k * 2})
+    vec_hits = {h["id"]: h for h in vec_resp.get("results", [])}
+
+    # 2. Get BM25 results
+    if _bm25 is None:
+        _ensure_bm25()
+    bm25_results = _bm25.search(query_str, top_k * 3) if _bm25 else []
+    bm25_scores = {doc_id: score for doc_id, score in bm25_results}
+
+    # 3. Combine with weighted sum
+    all_ids = set(vec_hits) | set(bm25_scores)
+    combined = []
+    for doc_id in all_ids:
+        v_score = vec_hits[doc_id]["score"] if doc_id in vec_hits else 0.0
+        b_score = bm25_scores.get(doc_id, 0.0)
+        # Normalize BM25 to [0,1] if possible
+        total = (1 - alpha) * v_score + alpha * min(b_score / 10.0, 1.0)
+        meta = _metadata.get(doc_id, {})
+        if source_type and meta.get("source_type") != source_type:
+            continue
+        combined.append({"id": doc_id, "score": round(total, 4),
+                         "content": (meta.get("content") or "")[:500]})
+
+    combined.sort(key=lambda x: -x["score"])
+    latency = int((time.time() - start) * 1000)
+    return {
+        "results": combined[:top_k],
+        "meta": {"latency_ms": latency, "empty": len(combined) == 0, "trace_id": tid},
+    }
 
 
 # ── Endpoints: proxy (auto-detect) ───────────────────────────
@@ -632,14 +796,13 @@ def delete(request: dict, authorization: Optional[str] = Header(None)):
             return {"success": False, "id": doc_id, "trace_id": tid,
                     "error": {"code": "not_found", "message": "id not found"}}
         if hard:
-            # Hard delete: remove from metadata + ids list + flag as deleted
             _metadata.pop(doc_id, None)
             _deleted_ids.add(doc_id)
-            # Note: FAISS index not rebuilt here — use /admin/compress to reclaim space
         else:
-            # Soft delete: just mark as deleted (filtered in query)
             _deleted_ids.add(doc_id)
 
+    global _bm25
+    _bm25 = None  # invalidate BM25 cache
     return {"success": True, "id": doc_id, "trace_id": tid, "deleted": True}
 
 
