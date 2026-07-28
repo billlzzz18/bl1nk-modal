@@ -18,6 +18,7 @@ import uuid
 from typing import Any, Optional
 
 import faiss
+import hashlib
 import httpx
 import math
 import numpy as np
@@ -79,13 +80,39 @@ def assert_token(authorization: Optional[str]):
 # ── Models ───────────────────────────────────────────────────
 
 class Metadata(BaseModel):
-    path: Optional[str] = None
-    repo: Optional[str] = None
+    """Metadata fields — lightweight, no raw content stored in memory.
+    
+    Content lives in original sources (tmp, project, qwen memories).
+    Search returns metadata + path — fetch content from source when needed.
+    """
+    model_config = {"extra": "allow"}
+
+    # Identity
+    hash: Optional[str] = None         # content hash (dedup / idempotent)
     session_id: Optional[str] = None
-    kb_id: Optional[str] = None
+    agent: Optional[str] = None        # hermes / agy / opencode / sandbox
+    type: Optional[str] = None         # feedback / user / project / reference
+    name: Optional[str] = None
+    description: Optional[str] = None
     tags: list[str] = []
-    timestamp: int = 0
+    
+    # Source
+    source_type: str = ""              # code / doc / session / memory
+    path: Optional[str] = None         # where content lives (original file)
+    repo: Optional[str] = None
+    kb_id: Optional[str] = None
+    
+    # Agent config (hermes hooks / skills)
+    handler: Optional[str] = None
+    schedule: Optional[str] = None
+    events: Optional[str] = None
+    model: Optional[str] = None
+    tools: list[str] = []
+    author: Optional[str] = None
     version: Optional[str] = None
+    
+    # Timing
+    timestamp: int = 0
 
 
 class IndexPayload(BaseModel):
@@ -419,15 +446,21 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
     tid = str(uuid.uuid4())
     try:
         get_models()
+        content_hash = hashlib.sha256(payload.content.encode()).hexdigest()[:16]
         vec = embed(payload.content)
         with _index_lock:
-            # idempotent: soft-delete old entry for same id
+            # idempotent: skip if same hash already indexed
+            for sid in _ids:
+                if sid not in _deleted_ids and _metadata.get(sid, {}).get("hash") == content_hash:
+                    return IndexResult(success=True, id=payload.id, trace_id=tid,
+                                       note="duplicate, skipped")
             if payload.id in _ids:
                 _deleted_ids.add(payload.id)
             _index.add(vec)
-            idx_pos = _index.ntotal - 1
             _ids.append(payload.id)
-            _metadata[payload.id] = {
+            # Lightweight metadata — no raw content stored
+            meta_record = {
+                "hash": content_hash,
                 "source_type": payload.source_type,
                 "path": payload.metadata.path,
                 "repo": payload.metadata.repo,
@@ -436,10 +469,22 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
                 "tags": payload.metadata.tags,
                 "timestamp": payload.metadata.timestamp,
                 "version": payload.metadata.version,
-                "content": payload.content,
+                "agent": payload.metadata.agent,
+                "type": payload.metadata.type,
+                "name": payload.metadata.name,
+                "description": payload.metadata.description,
+                "handler": payload.metadata.handler,
+                "schedule": payload.metadata.schedule,
+                "events": payload.metadata.events,
+                "model": payload.metadata.model,
+                "tools": payload.metadata.tools,
+                "author": payload.metadata.author,
             }
+            if hasattr(payload.metadata, "model_extra") and payload.metadata.model_extra:
+                meta_record.update(payload.metadata.model_extra)
+            _metadata[payload.id] = meta_record
         global _bm25
-        _bm25 = None  # invalidate BM25 cache
+        _bm25 = None
         return IndexResult(success=True, id=payload.id, trace_id=tid)
     except Exception as e:
         return IndexResult(success=False, id=payload.id, trace_id=tid,
@@ -786,17 +831,21 @@ def select_model(request: dict, authorization: Optional[str] = Header(None)):
 def select_docs(request: dict, authorization: Optional[str] = Header(None)):
     """Select documents by metadata fields — no vector similarity.
 
-    Filters by source_type, tags, repo, path, session_id, kb_id.
-    Supports pagination via offset/limit. Results sorted by recency (timestamp).
+    Filters by source_type, tags, repo, path, session_id, kb_id,
+    plus ANY extra field stored in metadata (dynamic).
+    Supports pagination via offset/limit. Results sorted by recency.
     """
     assert_token(authorization)
 
+    # Known fields (explicit for backward compat)
     source_type = request.get("source_type")
     tags_filter = set(request.get("tags", []) or [])
     repo = request.get("repo")
     path_prefix = request.get("path_prefix")
     session_id = request.get("session_id")
     kb_id = request.get("kb_id")
+    # Dynamic field filters — any extra key=value
+    filters = request.get("filters", {}) or {}
     offset = request.get("offset", 0)
     limit = min(request.get("limit", 50), 200)
 
@@ -818,9 +867,25 @@ def select_docs(request: dict, authorization: Optional[str] = Header(None)):
                 continue
             if tags_filter and not (set(meta.get("tags", [])) & tags_filter):
                 continue
+            # Dynamic filters: match any key=value
+            matched = True
+            for fk, fv in filters.items():
+                if fk in ("source_type", "tags", "repo", "path", "session_id", "kb_id",
+                          "path_prefix", "offset", "limit", "filters"):
+                    continue  # handled above
+                # Support both scalar and list values
+                mv = meta.get(fk)
+                if isinstance(fv, list):
+                    if mv not in fv:
+                        matched = False
+                        break
+                elif mv != fv:
+                    matched = False
+                    break
+            if not matched:
+                continue
             matches.append((meta.get("timestamp", 0), sid, meta))
 
-    # Sort: newest first
     matches.sort(key=lambda x: -x[0])
     page = matches[offset:offset + limit]
 
@@ -831,11 +896,7 @@ def select_docs(request: dict, authorization: Optional[str] = Header(None)):
         "results": [
             {"id": sid, "source_type": m.get("source_type"),
              "score": 0, "content": (m.get("content") or "")[:300],
-             "metadata": {
-                 "repo": m.get("repo"), "path": m.get("path"),
-                 "session_id": m.get("session_id"), "tags": m.get("tags", []),
-                 "timestamp": m.get("timestamp"),
-             }}
+             "metadata": {k: v for k, v in m.items() if k != "content"}}
             for _, sid, m in page
         ],
     }
@@ -935,66 +996,21 @@ def update(request: dict, authorization: Optional[str] = Header(None)):
 
 @app.post("/admin/compress")
 def admin_compress(authorization: Optional[str] = Header(None)):
-    """Rebuild FAISS index: remove soft-deleted vectors, reclaim space.
+    """Compact index: acknowledge deleted entries, reset state.
 
-    Also prunes metadata and frees GPU memory to prevent value bloat.
+    No re-embedding — raw content not stored in memory.
+    Deleted vectors remain in FAISS but filtered by _deleted_ids set.
     """
     assert_token(authorization)
     tid = str(uuid.uuid4())
-    global _bm25
 
     with _index_lock:
-        # 1. Drop deleted entries from metadata (reclaim memory)
-        for sid in list(_deleted_ids):
-            _metadata.pop(sid, None)
-
-        alive = [(sid, _metadata.get(sid, {}).get("content", ""))
-                 for sid in _ids if sid not in _deleted_ids]
-        removed = len(_ids) - len(alive)
-        metadata_freed = len(_deleted_ids)
-
-        if not alive:
-            # Explicitly free old index before assigning new
-            old = _index
-            _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
-            del old
-            _ids.clear()
-            _deleted_ids.clear()
-            _bm25 = None
-            _maybe_free_cuda()
-            return {"success": True, "trace_id": tid,
-                    "removed": removed, "metadata_freed": metadata_freed, "remaining": 0}
-
-        get_models()
-        new_ids: list[str] = []
-        new_index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
-        re_embedded = 0
-
-        # Track largest content for logging
-        max_content_len = 0
-        for sid, content in alive:
-            if not content or not content.strip():
-                continue
-            max_content_len = max(max_content_len, len(content))
-            vec = embed(content)
-            new_index.add(vec)
-            new_ids.append(sid)
-            re_embedded += 1
-
-        # 3. Replace index — old one is freed
-        old = _index
-        _index = new_index
-        del old
-
-        _ids = new_ids
+        removed = len(_deleted_ids)
+        alive = len(_ids) - removed
         _deleted_ids.clear()
-        _bm25 = None
-
-    _maybe_free_cuda()
 
     return {"success": True, "trace_id": tid,
-            "removed": removed, "metadata_freed": metadata_freed,
-            "re_embedded": re_embedded, "remaining": len(_ids)}
+            "acknowledged_deleted": removed, "remaining": alive}
 
 
 def _maybe_free_cuda():
