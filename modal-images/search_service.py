@@ -33,6 +33,7 @@ from transformers import AutoModel, AutoTokenizer
 from search_storage import (
     pg_save_meta, pg_delete, r2_save, r2_load, r2_delete, pg_load_all,
 )
+from search_cache import embed_cache, query_cache, rerank_cache, make_query_hash, make_rerank_hash, invalidate_all
 
 
 # ── Config ───────────────────────────────────────────────────
@@ -347,11 +348,27 @@ def _load_reranker():
 
 
 def embed(text: str) -> np.ndarray:
-    """Dispatch to local or API embedder based on active model type."""
+    """Dispatch to local or API embedder based on active model type.
+
+    Results cached by content hash (avoids re-embedding, saves API cost).
+    """
     cfg = EMBED_MODELS[_active_embed_key]
+    content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+
+    # Check cache
+    cached = embed_cache.get(content_hash)
+    if cached is not None:
+        return np.array(cached, dtype="float32")
+
+    # Compute embedding
     if cfg.get("type") == "api":
-        return _embed_api(text, cfg)
-    return _embed_local(text)
+        vec = _embed_api(text, cfg)
+    else:
+        vec = _embed_local(text)
+
+    # Cache result
+    embed_cache.put(content_hash, vec.tolist())
+    return vec
 
 
 def _embed_local(text: str) -> np.ndarray:
@@ -586,6 +603,8 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
 
         global _bm25
         _bm25 = None
+        query_cache.clear()
+        embed_cache.clear()
         return IndexResult(success=True, id=payload.id, trace_id=tid,
                            chunks=len(chunks), chunk_ids=chunk_ids)
     except Exception as e:
@@ -604,9 +623,17 @@ def query(request: dict, authorization: Optional[str] = Header(None)):
     source_type = request.get("source_type")
     top_k = min(request.get("top_k", 10), 100)
 
+    # Check query cache
+    qh = make_query_hash(q, source_type, top_k)
+    cached = query_cache.get(qh)
+    if cached is not None:
+        return cached
+
     with _index_lock:
         if _index is None or _index.ntotal == 0:
-            return {"results": [], "meta": {"latency_ms": 0, "empty": True, "trace_id": tid}}
+            result = {"results": [], "meta": {"latency_ms": 0, "empty": True, "trace_id": tid}}
+            query_cache.put(qh, result)
+            return result
         try:
             get_models()
             q_vec = embed(q)
@@ -635,10 +662,12 @@ def query(request: dict, authorization: Optional[str] = Header(None)):
             h["score"] = rerank_scores[i]
         hits = sorted(hits, key=lambda x: x["score"], reverse=True)[:top_k]
     latency = int((time.time() - start) * 1000)
-    return {
+    result = {
         "results": [{"id": h["id"], "score": h["score"], "content": h["content"]} for h in hits],
         "meta": {"latency_ms": latency, "empty": len(hits) == 0, "trace_id": tid},
     }
+    query_cache.put(qh, result)
+    return result
 
 
 # ── Endpoints: source-type aliases ───────────────────────────
