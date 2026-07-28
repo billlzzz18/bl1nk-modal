@@ -383,6 +383,7 @@ def root():
             "/health", "/auth/verify", "/index", "/query",
             "/proxy/search", "/graph/related",
             "/fts/search", "/hybrid/search",
+            "/kb/index", "/kb/search", "/kb/list",
             "/code/search", "/docs/search", "/session/search", "/memory/search",
             "/delete", "/update", "/admin/compress",
         ],
@@ -516,11 +517,111 @@ def session_search(request: dict, authorization: Optional[str] = Header(None)):
 
 @app.post("/memory/search")
 def memory_search(request: dict, authorization: Optional[str] = Header(None)):
+    """Search memory (source_type=memory) with optional kb_id filter."""
     request["source_type"] = "memory"
     return query(request, authorization)
 
 
-# ── Endpoints: FTS / Hybrid search (BM25 full-text) ─────────
+# ── Endpoints: Knowledge Base (kb) ───────────────────────────
+
+@app.post("/kb/index")
+def kb_index(request: dict, authorization: Optional[str] = Header(None)):
+    """Index a document into a knowledge base.
+
+    Convenience wrapper around /index that auto-sets kb_id and source_type.
+    """
+    assert_token(authorization)
+    from pydantic import ValidationError
+    kb_id = request.get("kb_id", "")
+    if not kb_id:
+        raise HTTPException(400, "kb_id is required")
+
+    payload = IndexPayload(
+        id=request.get("id", str(uuid.uuid4())),
+        source_type=request.get("source_type", "memory"),
+        content=request.get("content", ""),
+        metadata=Metadata(
+            kb_id=kb_id,
+            tags=request.get("tags", []),
+            path=request.get("path"),
+            repo=request.get("repo"),
+            session_id=request.get("session_id"),
+            timestamp=request.get("timestamp", int(time.time())),
+        ),
+    )
+    return index(payload, authorization)
+
+
+@app.post("/kb/search")
+def kb_search(request: dict, authorization: Optional[str] = Header(None)):
+    """Search within a specific knowledge base (kb_id).
+
+    Filters by kb_id in metadata. Returns vector + recency sorted results.
+    """
+    assert_token(authorization)
+    kb_id = request.get("kb_id", "")
+    if not kb_id:
+        raise HTTPException(400, "kb_id is required")
+
+    tid = str(uuid.uuid4())
+    start = time.time()
+    query_str = request.get("query", "")
+    top_k = min(request.get("top_k", 10), 100)
+
+    with _index_lock:
+        # Find all non-deleted docs with matching kb_id
+        kb_doc_ids = [
+            sid for sid in _ids
+            if sid not in _deleted_ids
+            and _metadata.get(sid, {}).get("kb_id") == kb_id
+        ]
+        if not kb_doc_ids:
+            latency = int((time.time() - start) * 1000)
+            return {"results": [], "meta": {"latency_ms": latency, "empty": True, "trace_id": tid}}
+
+        if not query_str.strip():
+            # No query — return recent docs in KB sorted by timestamp
+            matches = [(sid, _metadata.get(sid, {}).get("timestamp", 0))
+                       for sid in kb_doc_ids]
+            matches.sort(key=lambda x: -x[1])
+            hits = [{"id": sid, "score": 0, "content": (_metadata.get(sid, {}).get("content") or "")[:300]}
+                    for sid, _ in matches[:top_k]]
+            latency = int((time.time() - start) * 1000)
+            return {"results": hits, "meta": {"latency_ms": latency, "empty": False, "trace_id": tid}}
+
+        # Has query — use vector search, filter to KB docs only
+        get_models()
+        q_vec = embed(query_str)
+        scores, idxs = _index.search(q_vec, top_k * 3)
+        hits = []
+        for i, idx in enumerate(idxs[0]):
+            if idx < 0 or idx >= len(_ids):
+                continue
+            sid = _ids[idx]
+            if sid not in kb_doc_ids:
+                continue
+            meta = _metadata.get(sid, {})
+            hits.append({"id": sid, "score": float(scores[0][i]),
+                         "content": (meta.get("content") or "")[:500]})
+            if len(hits) >= top_k:
+                break
+
+    latency = int((time.time() - start) * 1000)
+    return {"results": hits, "meta": {"latency_ms": latency, "empty": len(hits) == 0, "trace_id": tid}}
+
+
+@app.get("/kb/list")
+def kb_list(authorization: Optional[str] = Header(None)):
+    """List all distinct knowledge base IDs in the index."""
+    assert_token(authorization)
+    with _index_lock:
+        kb_ids = sorted(set(
+            meta.get("kb_id", "")
+            for sid in _ids if sid not in _deleted_ids
+            for meta in [_metadata.get(sid, {})]
+            if meta.get("kb_id")
+        ))
+    return {"kb_ids": kb_ids, "total": len(kb_ids)}
 
 @app.post("/fts/search")
 def fts_search(request: dict, authorization: Optional[str] = Header(None)):
