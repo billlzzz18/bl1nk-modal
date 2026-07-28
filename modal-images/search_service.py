@@ -341,7 +341,65 @@ def proxy_search(req: ProxySearchRequest, authorization: Optional[str] = Header(
     return {"results": results, "detected_source_type": source_type, "total": len(results)}
 
 
-# ── Endpoints: graph (related docs via shared metadata) ──────
+# ── Endpoints: select (metadata-filtered query) ──────────────
+
+@app.post("/select")
+def select_docs(request: dict, authorization: Optional[str] = Header(None)):
+    """Select documents by metadata fields — no vector similarity.
+
+    Filters by source_type, tags, repo, path, session_id, kb_id.
+    Supports pagination via offset/limit. Results sorted by recency (timestamp).
+    """
+    assert_token(authorization)
+
+    source_type = request.get("source_type")
+    tags_filter = set(request.get("tags", []) or [])
+    repo = request.get("repo")
+    path_prefix = request.get("path_prefix")
+    session_id = request.get("session_id")
+    kb_id = request.get("kb_id")
+    offset = request.get("offset", 0)
+    limit = min(request.get("limit", 50), 200)
+
+    with _index_lock:
+        matches = []
+        for sid in _ids:
+            if sid in _deleted_ids:
+                continue
+            meta = _metadata.get(sid, {})
+            if source_type and meta.get("source_type") != source_type:
+                continue
+            if repo and meta.get("repo") != repo:
+                continue
+            if path_prefix and not (meta.get("path") or "").startswith(path_prefix):
+                continue
+            if session_id and meta.get("session_id") != session_id:
+                continue
+            if kb_id and meta.get("kb_id") != kb_id:
+                continue
+            if tags_filter and not (set(meta.get("tags", [])) & tags_filter):
+                continue
+            matches.append((meta.get("timestamp", 0), sid, meta))
+
+    # Sort: newest first
+    matches.sort(key=lambda x: -x[0])
+    page = matches[offset:offset + limit]
+
+    return {
+        "total": len(matches),
+        "offset": offset,
+        "limit": limit,
+        "results": [
+            {"id": sid, "source_type": m.get("source_type"),
+             "score": 0, "content": (m.get("content") or "")[:300],
+             "metadata": {
+                 "repo": m.get("repo"), "path": m.get("path"),
+                 "session_id": m.get("session_id"), "tags": m.get("tags", []),
+                 "timestamp": m.get("timestamp"),
+             }}
+            for _, sid, m in page
+        ],
+    }
 
 @app.post("/graph/related")
 def graph_related(request: dict, authorization: Optional[str] = Header(None)):
