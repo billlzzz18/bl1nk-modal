@@ -175,6 +175,8 @@ class IndexResult(BaseModel):
     trace_id: str
     error: Optional[Error] = None
     note: Optional[str] = None
+    chunks: Optional[int] = None
+    chunk_ids: Optional[list[str]] = None
 
 
 class SearchHit(BaseModel):
@@ -480,55 +482,86 @@ def auth_verify(authorization: Optional[str] = Header(None)):
     return {"ok": True, "token_id": API_TOKEN_ID}
 
 
+def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+    """Split text into overlapping chunks for better search coverage."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
+    return chunks
+
+
 # ── Endpoints: index ─────────────────────────────────────────
 
 @app.post("/index")
 def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
+    """Index a document. Long content is auto-split into chunks."""
     assert_token(authorization)
     tid = str(uuid.uuid4())
     try:
         get_models()
-        content_hash = hashlib.sha256(payload.content.encode()).hexdigest()[:16]
-        vec = embed(payload.content)
-        with _index_lock:
-            for sid in _ids:
-                if sid not in _deleted_ids and _metadata.get(sid, {}).get("hash") == content_hash:
-                    return IndexResult(success=True, id=payload.id, trace_id=tid,
-                                       note="duplicate, skipped")
-            if payload.id in _ids:
-                _deleted_ids.add(payload.id)
-            _index.add(vec)
-            _ids.append(payload.id)
-            # Write raw content to tmp (not in memory)
-            _write_content(content_hash, payload.content)
-            # Lightweight metadata in memory
-            meta_record = {
-                "hash": content_hash,
-                "source_type": payload.source_type,
-                "path": payload.metadata.path,
-                "repo": payload.metadata.repo,
-                "session_id": payload.metadata.session_id,
-                "kb_id": payload.metadata.kb_id,
-                "tags": payload.metadata.tags,
-                "timestamp": payload.metadata.timestamp,
-                "version": payload.metadata.version,
-                "agent": payload.metadata.agent,
-                "type": payload.metadata.type,
-                "name": payload.metadata.name,
-                "description": payload.metadata.description,
-                "handler": payload.metadata.handler,
-                "schedule": payload.metadata.schedule,
-                "events": payload.metadata.events,
-                "model": payload.metadata.model,
-                "tools": payload.metadata.tools,
-                "author": payload.metadata.author,
-            }
-            if hasattr(payload.metadata, "model_extra") and payload.metadata.model_extra:
-                meta_record.update(payload.metadata.model_extra)
-            _metadata[payload.id] = meta_record
+        chunks = _chunk_text(payload.content)
+        chunk_ids = []
+        for ci, chunk in enumerate(chunks):
+            suffix = f"#chunk{ci}" if len(chunks) > 1 else ""
+            chunk_id = f"{payload.id}{suffix}"
+            chunk_hash = hashlib.sha256(chunk.encode()).hexdigest()[:16]
+
+            vec = embed(chunk)
+            with _index_lock:
+                # Skip if same hash already indexed
+                skip = False
+                for sid in _ids:
+                    if sid not in _deleted_ids and _metadata.get(sid, {}).get("hash") == chunk_hash:
+                        skip = True
+                        break
+                if skip:
+                    chunk_ids.append(chunk_id + "(dup)")
+                    continue
+
+                if chunk_id in _ids:
+                    _deleted_ids.add(chunk_id)
+                _index.add(vec)
+                _ids.append(chunk_id)
+                _write_content(chunk_hash, chunk)
+
+                meta_record = {
+                    "hash": chunk_hash,
+                    "parent_id": payload.id,
+                    "chunk_index": ci,
+                    "total_chunks": len(chunks),
+                    "source_type": payload.source_type,
+                    "path": payload.metadata.path,
+                    "repo": payload.metadata.repo,
+                    "session_id": payload.metadata.session_id,
+                    "kb_id": payload.metadata.kb_id,
+                    "tags": payload.metadata.tags,
+                    "timestamp": payload.metadata.timestamp,
+                    "version": payload.metadata.version,
+                    "agent": payload.metadata.agent,
+                    "type": payload.metadata.type,
+                    "name": payload.metadata.name,
+                    "description": payload.metadata.description,
+                    "handler": payload.metadata.handler,
+                    "schedule": payload.metadata.schedule,
+                    "events": payload.metadata.events,
+                    "model": payload.metadata.model,
+                    "tools": payload.metadata.tools,
+                    "author": payload.metadata.author,
+                }
+                if hasattr(payload.metadata, "model_extra") and payload.metadata.model_extra:
+                    meta_record.update(payload.metadata.model_extra)
+                _metadata[chunk_id] = meta_record
+                chunk_ids.append(chunk_id)
+
         global _bm25
         _bm25 = None
-        return IndexResult(success=True, id=payload.id, trace_id=tid)
+        return IndexResult(success=True, id=payload.id, trace_id=tid,
+                           chunks=len(chunks), chunk_ids=chunk_ids)
     except Exception as e:
         return IndexResult(success=False, id=payload.id, trace_id=tid,
                            error=Error(code="index_error", message=str(e)))
