@@ -9,24 +9,12 @@ repos:
       - id: check-added-large-files
   - repo: local
     hooks:
-      - id: ruff-modal-runner
-        name: ruff (modal-runner)
-        entry: bash -c 'cd modal-apps/modal-runner && ruff check . && ruff format --check .'
+      - id: ruff-bl1nk-app
+        name: ruff (bl1nk-app)
+        entry: bash -c 'cd modal-apps/bl1nk-app && ruff check . && ruff format --check .'
         language: system
         pass_filenames: false
-        files: ^modal-apps/modal-runner/
-      - id: ruff-modal-agy
-        name: ruff (modal-agy)
-        entry: bash -c 'cd modal-apps/modal-agy && ruff check . && ruff format --check .'
-        language: system
-        pass_filenames: false
-        files: ^modal-apps/modal-agy/
-      - id: ruff-modal-sandbox
-        name: ruff (modal-sandbox)
-        entry: bash -c 'cd modal-apps/modal-sandbox && ruff check . && ruff format --check .'
-        language: system
-        pass_filenames: false
-        files: ^modal-apps/modal-sandbox/
+        files: ^modal-apps/bl1nk-app/
       - id: ruff-modal-images
         name: ruff (modal-images)
         entry: bash -c 'cd modal-images && ruff check . && ruff format --check .'
@@ -35,13 +23,13 @@ repos:
         files: ^modal-images/
       - id: cargo-fmt
         name: cargo fmt
-        entry: cargo fmt --check
+        entry: bash -c 'cd modal-apps/bl1nk-app/engine && cargo fmt --check'
         language: system
         pass_filenames: false
-        files: ^modal-apps/modal-opencode/engine/Cargo.toml
+        files: ^modal-apps/bl1nk-app/engine/
       - id: cargo-test
         name: cargo test
-        entry: cargo test --all
+        entry: bash -c 'cd modal-apps/bl1nk-app/engine && cargo test --all'
         language: system
         pass_filenames: false
-        files: ^modal-apps/modal-opencode/engine/Cargo.toml
+        files: ^modal-apps/bl1nk-app/engine/
