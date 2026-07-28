@@ -48,6 +48,7 @@ image = (
         "numpy>=1.24",
         "httpx>=0.27",
         "optimum[onnxruntime]>=1.20",
+        "asyncpg>=0.29",
     )
     .add_local_file("search_service.py", "/home/workspace/search_service.py", copy=True)
     # ── Pre-download ALL registered models + export to ONNX ─

@@ -18,6 +18,7 @@ import uuid
 from typing import Any, Optional
 
 import faiss
+import asyncio
 import hashlib
 import httpx
 import math
@@ -28,6 +29,10 @@ import torch
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from transformers import AutoModel, AutoTokenizer
+
+from search_storage import (
+    pg_save_meta, pg_delete, r2_save, r2_load, r2_delete, pg_load_all,
+)
 
 
 # ── Config ───────────────────────────────────────────────────
@@ -70,6 +75,19 @@ app = FastAPI(title="bl1nk-search")
 TMP_STORE = os.environ.get("TMPDIR", "/tmp") + "/bl1nk-search"
 
 
+def _fire_and_forget(coro):
+    """Run async task in background thread (safe from sync context)."""
+    def _run():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(coro)
+            loop.close()
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _ensure_tmp_store():
     os.makedirs(TMP_STORE, exist_ok=True)
 
@@ -81,12 +99,15 @@ def _write_content(hash_key: str, content: str):
 
 
 def _read_content(hash_key: str) -> str:
-    """Read raw content from tmp file."""
+    """Read raw content from tmp file, fallback to R2."""
     fp = os.path.join(TMP_STORE, f"{hash_key}.txt")
     try:
         return Path(fp).read_text(encoding="utf-8", errors="replace")
     except (FileNotFoundError, OSError):
-        return ""
+        content = r2_load(hash_key)
+        if content:
+            _write_content(hash_key, content)  # cache locally
+        return content or ""
 
 
 def _remove_content(hash_key: str):
@@ -557,6 +578,11 @@ def index(payload: IndexPayload, authorization: Optional[str] = Header(None)):
                     meta_record.update(payload.metadata.model_extra)
                 _metadata[chunk_id] = meta_record
                 chunk_ids.append(chunk_id)
+                # Persist: metadata → PG, raw content → R2
+                meta_record["id"] = chunk_id
+                meta_record["content_hash"] = chunk_hash
+                _fire_and_forget(pg_save_meta(meta_record))
+                r2_save(chunk_hash, chunk)
 
         global _bm25
         _bm25 = None
@@ -1034,8 +1060,12 @@ def delete(request: dict, authorization: Optional[str] = Header(None)):
             return {"success": False, "id": doc_id, "trace_id": tid,
                     "error": {"code": "not_found", "message": "id not found"}}
         if hard:
-            _metadata.pop(doc_id, None)
+            meta = _metadata.pop(doc_id, {})
             _deleted_ids.add(doc_id)
+            # Remove from PG + R2
+            _fire_and_forget(pg_delete(doc_id))
+            if meta.get("hash"):
+                r2_delete(meta["hash"])
         else:
             _deleted_ids.add(doc_id)
 
@@ -1150,10 +1180,32 @@ def daemon_status(authorization: Optional[str] = Header(None)):
 
 @app.on_event("startup")
 def startup():
+    """Initialize: FAISS index, models, and restore from persistent storage."""
     sys.setrecursionlimit(2000)
     get_models()
-    global _index
+    global _index, _metadata, _ids
     _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
+
+    # Try to restore metadata from PostgreSQL + rebuild FAISS from R2
+    try:
+        loop = asyncio.get_event_loop()
+        rows = loop.run_until_complete(pg_load_all())
+        if rows:
+            for row in rows:
+                sid = row.get("id", "")
+                content_hash = row.get("content_hash") or row.get("hash", "")
+                content = r2_load(content_hash)
+                if not content:
+                    continue
+                # Re-embed
+                vec = embed(content)
+                _index.add(vec)
+                _ids.append(sid)
+                row.pop("id", None)
+                _metadata[sid] = row
+            print(f"[startup] Restored {len(rows)} docs from PG + R2")
+    except Exception as e:
+        print(f"[startup] PG/R2 restore skipped: {e}")
 
 
 @app.on_event("shutdown")
