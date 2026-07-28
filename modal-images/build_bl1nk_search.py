@@ -48,6 +48,15 @@ image = (
         "numpy>=1.24",
     )
     .add_local_file("search_service.py", "/home/workspace/search_service.py", copy=True)
+    # ── Pre-download models into image layer ─────────────────
+    # Prevents cold-start model downloads from HuggingFace.
+    .run_commands(
+        "python3 -c \"from transformers import AutoTokenizer, AutoModel; "
+        "AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2'); "
+        "AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2'); "
+        "AutoTokenizer.from_pretrained('BAAI/bge-reranker-v2-m3'); "
+        "AutoModel.from_pretrained('BAAI/bge-reranker-v2-m3')\"",
+    )
 )
 
 with modal.enable_output():
