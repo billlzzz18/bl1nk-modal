@@ -27,9 +27,21 @@ from transformers import AutoModel, AutoTokenizer
 
 # ── Config ───────────────────────────────────────────────────
 
-EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
-EMBED_DIM = 384
+# Model registry — users can switch via POST /models/select
+EMBED_MODELS: dict[str, dict] = {
+    "minilm":  {"name": "sentence-transformers/all-MiniLM-L6-v2", "dim": 384,  "desc": "Fast, 22MB"},
+    "bge-small-en": {"name": "BAAI/bge-small-en-v1.5",            "dim": 384,  "desc": "Good balance"},
+    "bge-base-en":  {"name": "BAAI/bge-base-en-v1.5",             "dim": 768,  "desc": "Higher quality"},
+    "qwen3-0.6b":   {"name": "Qwen/Qwen3-Embedding-0.6B",        "dim": 1024, "desc": "Best quality"},
+}
+RERANK_MODELS: dict[str, dict] = {
+    "bge-m3":    {"name": "BAAI/bge-reranker-v2-m3",         "desc": "Cross-encoder"},
+    "bge-small": {"name": "BAAI/bge-reranker-v2-minicpm",    "desc": "Lighter"},
+}
+
+# Active model selection (can be changed via API)
+_active_embed_key: str = "minilm"
+_active_rerank_key: str = "bge-m3"
 
 API_TOKEN = os.getenv("BL1NK_API_TOKEN", "")
 API_TOKEN_ID = os.getenv("BL1NK_TOKEN_ID", "default-token")
@@ -115,13 +127,15 @@ def get_models():
     global _tokenizer, _embed_model, _rerank_tokenizer, _rerank_model
     if _tokenizer is not None:
         return
-    _tokenizer = AutoTokenizer.from_pretrained(EMBED_MODEL)
-    _embed_model = AutoModel.from_pretrained(EMBED_MODEL)
+    embed_cfg = EMBED_MODELS[_active_embed_key]
+    rerank_cfg = RERANK_MODELS[_active_rerank_key]
+    _tokenizer = AutoTokenizer.from_pretrained(embed_cfg["name"])
+    _embed_model = AutoModel.from_pretrained(embed_cfg["name"])
     _embed_model.eval()
     if torch.cuda.is_available():
         _embed_model = _embed_model.cuda()
-    _rerank_tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL)
-    _rerank_model = AutoModel.from_pretrained(RERANK_MODEL)
+    _rerank_tokenizer = AutoTokenizer.from_pretrained(rerank_cfg["name"])
+    _rerank_model = AutoModel.from_pretrained(rerank_cfg["name"])
     _rerank_model.eval()
     if torch.cuda.is_available():
         _rerank_model = _rerank_model.cuda()
@@ -341,7 +355,61 @@ def proxy_search(req: ProxySearchRequest, authorization: Optional[str] = Header(
     return {"results": results, "detected_source_type": source_type, "total": len(results)}
 
 
-# ── Endpoints: select (metadata-filtered query) ──────────────
+# ── Endpoints: model selection ──────────────────────────────
+
+@app.get("/models")
+def list_models(authorization: Optional[str] = Header(None)):
+    """List available embed + reranker models and current selection."""
+    assert_token(authorization)
+    return {
+        "embed": {
+            key: {**cfg, "active": key == _active_embed_key}
+            for key, cfg in EMBED_MODELS.items()
+        },
+        "reranker": {
+            key: {**cfg, "active": key == _active_rerank_key}
+            for key, cfg in RERANK_MODELS.items()
+        },
+    }
+
+
+@app.post("/models/select")
+def select_model(request: dict, authorization: Optional[str] = Header(None)):
+    """Switch active model(s). Rebuilds index if embed dim changes."""
+    global _active_embed_key, _active_rerank_key, _tokenizer, _embed_model, _rerank_tokenizer, _rerank_model, _index
+    assert_token(authorization)
+
+    embed_key = request.get("embed", _active_embed_key)
+    rerank_key = request.get("reranker", _active_rerank_key)
+
+    if embed_key not in EMBED_MODELS:
+        raise HTTPException(400, f"Unknown embed model: {embed_key}. Options: {list(EMBED_MODELS)}")
+    if rerank_key not in RERANK_MODELS:
+        raise HTTPException(400, f"Unknown reranker model: {rerank_key}. Options: {list(RERANK_MODELS)}")
+
+    dim_changed = EMBED_MODELS[embed_key]["dim"] != EMBED_MODELS[_active_embed_key]["dim"]
+
+    # Unload old models
+    _tokenizer = None
+    _embed_model = None
+    _rerank_tokenizer = None
+    _rerank_model = None
+
+    _active_embed_key = embed_key
+    _active_rerank_key = rerank_key
+
+    # Reload with new selection
+    get_models()
+
+    if dim_changed:
+        with _index_lock:
+            _index = faiss.IndexFlatIP(EMBED_MODELS[embed_key]["dim"])
+
+    return {
+        "active": {"embed": _active_embed_key, "reranker": _active_rerank_key},
+        "dim_changed": dim_changed,
+        "note": "Models reloaded. Re-index documents if dim changed.",
+    }
 
 @app.post("/select")
 def select_docs(request: dict, authorization: Optional[str] = Header(None)):
@@ -506,14 +574,14 @@ def admin_compress(authorization: Optional[str] = Header(None)):
         removed = len(_ids) - len(kept_indices)
         if not kept_indices:
             # Nothing to keep — reset
-            _index = faiss.IndexFlatIP(EMBED_DIM)
+            _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
             _ids.clear()
             _deleted_ids.clear()
             return {"success": True, "trace_id": tid, "removed": removed, "remaining": 0}
 
         # Extract kept vectors by direct FAISS index access
         old_index = _index
-        new_index = faiss.IndexFlatIP(EMBED_DIM)
+        new_index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
         try:
             # FAISS doesn't support individual vector extraction directly.
             # We reconstruct by re-indexing from metadata content.
@@ -543,7 +611,7 @@ def daemon_compact(authorization: Optional[str] = Header(None)):
 
         get_models()
         new_ids: list[str] = []
-        new_index = faiss.IndexFlatIP(EMBED_DIM)
+        new_index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
         for sid, content in alive:
             if not content.strip():
                 continue
@@ -586,7 +654,7 @@ def startup():
     sys.setrecursionlimit(2000)
     get_models()
     global _index
-    _index = faiss.IndexFlatIP(EMBED_DIM)
+    _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
 
 
 @app.on_event("shutdown")
