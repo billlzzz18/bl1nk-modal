@@ -935,42 +935,72 @@ def update(request: dict, authorization: Optional[str] = Header(None)):
 
 @app.post("/admin/compress")
 def admin_compress(authorization: Optional[str] = Header(None)):
-    """Rebuild FAISS index: remove soft-deleted vectors, reclaim space."""
+    """Rebuild FAISS index: remove soft-deleted vectors, reclaim space.
+
+    Also prunes metadata and frees GPU memory to prevent value bloat.
+    """
     assert_token(authorization)
     tid = str(uuid.uuid4())
     global _bm25
 
     with _index_lock:
+        # 1. Drop deleted entries from metadata (reclaim memory)
+        for sid in list(_deleted_ids):
+            _metadata.pop(sid, None)
+
         alive = [(sid, _metadata.get(sid, {}).get("content", ""))
                  for sid in _ids if sid not in _deleted_ids]
         removed = len(_ids) - len(alive)
+        metadata_freed = len(_deleted_ids)
 
         if not alive:
+            # Explicitly free old index before assigning new
+            old = _index
             _index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
+            del old
             _ids.clear()
             _deleted_ids.clear()
             _bm25 = None
-            return {"success": True, "trace_id": tid, "removed": removed, "remaining": 0}
+            _maybe_free_cuda()
+            return {"success": True, "trace_id": tid,
+                    "removed": removed, "metadata_freed": metadata_freed, "remaining": 0}
 
         get_models()
         new_ids: list[str] = []
         new_index = faiss.IndexFlatIP(EMBED_MODELS[_active_embed_key]["dim"])
         re_embedded = 0
+
+        # Track largest content for logging
+        max_content_len = 0
         for sid, content in alive:
             if not content or not content.strip():
                 continue
+            max_content_len = max(max_content_len, len(content))
             vec = embed(content)
             new_index.add(vec)
             new_ids.append(sid)
             re_embedded += 1
 
+        # 3. Replace index — old one is freed
+        old = _index
         _index = new_index
+        del old
+
         _ids = new_ids
         _deleted_ids.clear()
         _bm25 = None
 
-    return {"success": True, "trace_id": tid, "removed": removed,
+    _maybe_free_cuda()
+
+    return {"success": True, "trace_id": tid,
+            "removed": removed, "metadata_freed": metadata_freed,
             "re_embedded": re_embedded, "remaining": len(_ids)}
+
+
+def _maybe_free_cuda():
+    """Free GPU memory if CUDA is available."""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 # ── Endpoints: daemon (triggered by Modal cron) ──────────────
