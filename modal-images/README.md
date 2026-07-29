@@ -39,11 +39,13 @@ modal run build_bl1nk_rust.py
 
 ## Image: bl1nk-search
 
-Embedding + reranker search service image (`build_bl1nk_search.py`), deployed via `deploy_bl1nk_search.py`. Same tag convention (`latest` / `v1` / `v1-YYYYMMDD`), same `_tags.publish_versioned()` helper, same one-line `MAJOR_VERSION` bump:
+Embedding + reranker search service image (`build_bl1nk_search.py`). Service code lives in `modal-apps/bl1nk-search/`. Same tag convention (`latest` / `v2` / `v2-YYYYMMDD`), same `_tags.publish_versioned()` helper, same one-line `MAJOR_VERSION` bump:
 
 ```bash
 modal run build_bl1nk_search.py
 ```
+
+Deploy the service separately: `cd modal-apps/bl1nk-search && uv run modal deploy deploy.py`
 
 ## Versioning: one helper, one line per bump
 
@@ -53,4 +55,4 @@ modal run build_bl1nk_search.py
 2. Change its `MAJOR_VERSION` constant.
 3. Run it — `latest`, the new major tag, and today's dated tag are published together.
 
-Everything that *consumes* these images (`modal-apps/modal-runner`, `modal-agy`, `modal-sandbox`, `modal-opencode`) pins to `:latest`, so they never need updating when a new version is published — only the build script's `MAJOR_VERSION` line does.
+Everything that *consumes* these images (`modal-apps/bl1nk-app`, `modal-apps/bl1nk-search`) pins to `:latest`, so they never need updating when a new version is published — only the build script's `MAJOR_VERSION` line does.

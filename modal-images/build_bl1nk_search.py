@@ -47,7 +47,7 @@ image = (
         "faiss-cpu>=1.7",
         "numpy>=1.24",
     )
-    .add_local_file("search_service.py", "/home/workspace/search_service.py", copy=True)
+    .add_local_file("../modal-apps/bl1nk-search/search_service.py", "/home/workspace/search_service.py", copy=True)
 )
 
 with modal.enable_output():

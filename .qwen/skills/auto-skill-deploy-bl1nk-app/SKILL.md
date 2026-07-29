@@ -58,19 +58,19 @@ The published image is `bl1nk-agent:latest`. To bump the major version (e.g., `v
 
 ## Deploying the `bl1nk-search` service
 
-The search service is a separate Modal app, not part of `bl1nk-app`. Two steps:
+The search service is a separate Modal app, not part of `bl1nk-app`. Service code lives in `modal-apps/bl1nk-search/`. Two steps:
 
 ```bash
+# 1. Build the bl1nk-search image (publishes :latest, :v2, :v2-YYYYMMDD)
 cd modal-images
-
-# 1. Build the bl1nk-search image (publishes :latest, :v1, :v1-YYYYMMDD)
 modal run build_bl1nk_search.py
 
 # 2. Deploy the search service
-modal deploy deploy_bl1nk_search.py
+cd ../modal-apps/bl1nk-search
+uv run modal deploy deploy.py
 ```
 
-The `bl1nk-search` service spec lives in `docs/BL1NK_SEARCH_V1_SPEC.md`. The service provides embedding indexing and reranked query endpoints; tests live at `modal-images/tests/test_search_service.py`.
+The `bl1nk-search` service spec lives in `docs/BL1NK_SEARCH_V1_SPEC.md`. The service provides embedding indexing and reranked query endpoints; tests live at `modal-apps/bl1nk-search/tests/test_search_service.py`.
 
 ## Common mistakes to avoid
 

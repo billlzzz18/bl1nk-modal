@@ -15,7 +15,8 @@ Instructional context for AI agents working in this monorepo.
 | Path | Purpose |
 | --- | --- |
 | `modal-apps/bl1nk-app/` | Unified Modal app (Python). Primary dispatch entrypoint + headless subagents + Rust engine. |
-| `modal-images/` | Shared base-image build scripts (`bl1nk-rust`, `bl1nk-search`) and the deployed `bl1nk-search` service. |
+| `modal-apps/bl1nk-search/` | Search service (FastAPI + embedding + reranker). Deployed separately from bl1nk-app. |
+| `modal-images/` | Shared base-image build scripts (`bl1nk-agent`, `bl1nk-rust`, `bl1nk-search`). Image builds only — no services. |
 | `conductor/` | Conductor-style project context (product, tech stack, tracks, specs, style guides). |
 | `docs/` | Top-level specs (currently `BL1NK_SEARCH_V1_SPEC.md`). |
 | `scripts/` | Repo-level helpers (`install-windows.ps1`, `fix_whitespace.py`). |
@@ -90,11 +91,11 @@ Three base images, all built via `modal run` (not `modal deploy`):
 | --- | --- | --- |
 | `bl1nk-agent:latest` / `v1` / `v1-YYYYMMDD` | `build_bl1nk_agent.py` | Primary agent base (Rust + Node + Bun + gh + claude + hermes + qwen) |
 | `bl1nk-rust:latest` / `v2` / `v2-YYYYMMDD` | `build_bl1nk_rust.py` | Sandbox/agent base (Rust + Node + Bun + gh + claude) |
-| `bl1nk-search:latest` / `v1` / `v1-YYYYMMDD` | `build_bl1nk_search.py` + `deploy_bl1nk_search.py` | Embedding + reranker search service |
+| `bl1nk-search:latest` / `v2` / `v2-YYYYMMDD` | `build_bl1nk_search.py` | Embedding + reranker search service image (service code in `modal-apps/bl1nk-search/`) |
 
 **Tag convention (very strict):** both build scripts publish three tags via the shared `_tags.publish_versioned()` helper — `latest`, the major version (`vN`), and a dated tag (`vN-YYYYMMDD`). To bump the major version, change the single `MAJOR_VERSION` constant in the build script. **Do not** hand-edit `publish(...)` calls or hand-type dates. Consumers always pin to `:latest`, so they don't need to update when a new version is published.
 
-`search_service.py` is the FastAPI app behind the `bl1nk-search` image. Spec: `docs/BL1NK_SEARCH_V1_SPEC.md`. `tests/test_search_service.py` covers it.
+`search_service.py` is the FastAPI app behind the `bl1nk-search` image, now at `modal-apps/bl1nk-search/`. Spec: `docs/BL1NK_SEARCH_V1_SPEC.md`. `modal-apps/bl1nk-search/tests/test_search_service.py` covers it.
 
 ---
 
@@ -176,7 +177,8 @@ The `bl1nk-search` service deploys separately:
 ```bash
 cd modal-images
 modal run build_bl1nk_search.py
-modal deploy deploy_bl1nk_search.py
+cd ../modal-apps/bl1nk-search
+uv run modal deploy deploy.py
 ```
 
 ### 6.5 Tests
@@ -261,7 +263,7 @@ These files still reference the **pre-unification** four-app layout. When you ha
 
 - `modal-apps/bl1nk-app/TODO.md`: **No auth middleware** on API endpoints (sandbox create/exec are publicly accessible); `scripts/publish.sh` runs `pytest` but `tests/test_upload_download.py` and `tests/test_image.py` are still pending.
 - `modal-apps/bl1nk-app/engine/TODO.md`: `exclusive_groups` should be a constant; regex patterns should be configurable; no benchmarks yet.
-- `modal-images/TODO.md`: `search_service.py` has global mutable `_index`/`_ids` that are not thread-safe (everything else is resolved).
+- `modal-apps/bl1nk-search/TODO.md` (if exists) or `modal-images/TODO.md`: `search_service.py` has global mutable `_index`/`_ids` that are not thread-safe (everything else is resolved).
 
 ---
 
@@ -282,7 +284,7 @@ modal run modal-images/build_bl1nk_rust.py
 
 # Build + deploy the search service
 modal run modal-images/build_bl1nk_search.py
-modal deploy modal-images/deploy_bl1nk_search.py
+cd modal-apps/bl1nk-search && uv run modal deploy deploy.py
 
 # Serve locally
 cd modal-apps/bl1nk-app && uv run modal serve modal_app.py
