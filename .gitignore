@@ -16,5 +16,6 @@ build/
 *.log
 
 *:Zone.Identifier
+.mimocode/
 
 # subrepos/folders

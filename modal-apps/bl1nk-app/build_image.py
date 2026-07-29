@@ -47,6 +47,7 @@ SHARED_INSTALL_COMMANDS = [
     "rm -rf /tmp/* /var/tmp/*",
     # Symlink tools installed to /root/.local/bin into /usr/local/bin (so they survive HOME=/home/workspace)
     "ln -sf /root/.local/bin/qwen /usr/local/bin/qwen",
+    "ln -sf /root/.local/bin/claude /usr/local/bin/claude",
     "ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo",
     "ln -sf /root/.cargo/bin/rustup /usr/local/bin/rustup",
     "ln -sf /root/.cargo/bin/rustc /usr/local/bin/rustc",
