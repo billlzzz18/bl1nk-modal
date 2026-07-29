@@ -45,11 +45,11 @@ Use this for local iteration. `serve` creates an ephemeral app that auto-reloads
 
 ## Building or updating the `bl1nk-agent` base image
 
-The base image is built by `modal-apps/bl1nk-app/build_image.py`. It is **not** a `modal deploy` — it is `modal run`, which builds the image and publishes it under three tags via the shared `_tags.publish_versioned()` helper.
+The base image is built by `modal-images/build_bl1nk_agent.py`. It is **not** a `modal deploy` — it is `modal run`, which builds the image and publishes it under three tags via the shared `_tags.publish_versioned()` helper.
 
 ```bash
 cd /home/billl/02dev/bl1nk-modal    # or your repo root
-modal run modal-apps/bl1nk-app/build_image.py
+modal run modal-images/build_bl1nk_agent.py
 ```
 
 The published image is `bl1nk-agent:latest`. To bump the major version (e.g., `v1` → `v2`), use the `bump-base-image-version` skill — do not hand-edit the `publish(...)` call or hand-type a date.
@@ -75,7 +75,7 @@ The `bl1nk-search` service spec lives in `docs/BL1NK_SEARCH_V1_SPEC.md`. The ser
 ## Common mistakes to avoid
 
 - **Deploying with the wrong name.** `--name bl1nk` is correct. Older code paths in `scripts/publish.sh`, `scripts/check.sh`, and `SETUP.md` reference `modal-sandbox-v2.1` — those are stale, do not copy them.
-- **Running `modal run` instead of `modal deploy` for the app.** `modal run` is for **building images** (`build_image.py`, `build_bl1nk_rust.py`, `build_bl1nk_search.py`); `modal deploy` is for serving the app (`modal_app.py`, `deploy_bl1nk_search.py`).
+- **Running `modal run` instead of `modal deploy` for the app.** `modal run` is for **building images** (`build_bl1nk_agent.py`, `build_bl1nk_rust.py`, `build_bl1nk_search.py`); `modal deploy` is for serving the app (`modal_app.py`, `deploy_bl1nk_search.py`).
 - **Forgetting `uv sync`.** New deps in `pyproject.toml` won't be picked up by `modal deploy` until you've run `uv sync` in `modal-apps/bl1nk-app/`. `uv` manages both the local venv and the Modal-deployed environment.
 - **Forgetting `--env-file .env`.** Headless deploys need `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET`. Either run via `uv run --env-file .env modal deploy ...` or export the variables in the shell.
 - **Deploying before the base image exists.** `modal deploy modal_app.py` will succeed (it just uploads code), but the first webhook invocation will fail with an "image not found" error. Always build the image first.
@@ -88,7 +88,7 @@ The app exposes a `dev()` function that runs `shutil.which` on every tool the im
 modal run modal-apps/bl1nk-app/modal_app.py::dev
 ```
 
-If every tool reports a path (not "not found"), the image is good. If `claude` is "not found", the Claude CLI install step in `build_image.py` may have hit a network blip; re-run `modal run build_image.py`.
+If every tool reports a path (not "not found"), the image is good. If `claude` is "not found", the Claude CLI install step in `build_bl1nk_agent.py` may have hit a network blip; re-run `modal run modal-images/build_bl1nk_agent.py`.
 
 ## How to apply
 

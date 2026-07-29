@@ -35,7 +35,6 @@ Entry point: `modal_app.py`. **App name: `bl1nk`.** **Image it consumes: `bl1nk-
 modal-apps/bl1nk-app/
 ├── modal_app.py            # Primary dispatch (FastAPI webhooks + Modal functions)
 ├── modal_app_service.py    # Service-side entrypoint variant
-├── build_image.py          # Builds & publishes bl1nk-agent:latest (re-runs modal run build_image.py)
 ├── test_endpoint.py        # Manual endpoint smoke test
 ├── test_simple.py          # Sanity test
 ├── conftest.py             # Pytest fixtures
@@ -58,7 +57,7 @@ modal-apps/bl1nk-app/
 
 ### 2.2 Image and runtime
 
-The base image `bl1nk-agent:latest` (built by `build_image.py`) is a `debian_slim` Python 3.12 image with:
+The base image `bl1nk-agent:latest` (built by `modal-images/build_bl1nk_agent.py`) is a `debian_slim` Python 3.12 image with:
 
 - Rust toolchain (rustup, `~/.cargo/bin` on PATH)
 - Node.js 22 + npm (via NodeSource)
@@ -85,10 +84,11 @@ The function `dev()` is a toolchain smoke test (returns `shutil.which` results f
 
 ## 3. Modal images: `modal-images/`
 
-Two base images, both built via `modal run` (not `modal deploy`):
+Three base images, all built via `modal run` (not `modal deploy`):
 
 | Image | Script | Purpose |
 | --- | --- | --- |
+| `bl1nk-agent:latest` / `v1` / `v1-YYYYMMDD` | `build_bl1nk_agent.py` | Primary agent base (Rust + Node + Bun + gh + claude + hermes + qwen) |
 | `bl1nk-rust:latest` / `v2` / `v2-YYYYMMDD` | `build_bl1nk_rust.py` | Sandbox/agent base (Rust + Node + Bun + gh + claude) |
 | `bl1nk-search:latest` / `v1` / `v1-YYYYMMDD` | `build_bl1nk_search.py` + `deploy_bl1nk_search.py` | Embedding + reranker search service |
 
@@ -161,7 +161,7 @@ uv run modal serve modal_app.py     # local serve
 
 ```bash
 # From repo root — script does not need a per-app venv.
-modal run modal-apps/bl1nk-app/build_image.py
+modal run modal-images/build_bl1nk_agent.py
 # (Inside the app, scripts/build.sh wraps `modal run ../../modal-images/build_bl1nk_rust.py`.)
 ```
 
@@ -275,7 +275,7 @@ uv sync && uv tool install modal && modal setup
 powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
 
 # Build the agent base image (publishes bl1nk-agent:latest)
-modal run modal-apps/bl1nk-app/build_image.py
+modal run modal-images/build_bl1nk_agent.py
 
 # Build the rust base image (publishes bl1nk-rust:latest, v2, v2-YYYYMMDD)
 modal run modal-images/build_bl1nk_rust.py

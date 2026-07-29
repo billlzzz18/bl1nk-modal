@@ -48,7 +48,7 @@ python -c "import sovereign_engine; print(sovereign_engine.resolve_full_state(..
 The principle from `conductor/modal_deployment.md`: **layer caching**. Keep the slow, rarely-changing steps (`apt_install`, `rustup`, `pip install maturin`) in one `modal.Image` chain, and the fast, often-changing step (`copy_local_dir("./engine", ...)` + `maturin develop`) in a second chain. Modal's image layer cache keys on the chain contents, so code changes don't trigger a full toolchain reinstall.
 
 ```python
-# In the image definition (e.g., build_image.py or _make_sandbox_image())
+# In the image definition (e.g., modal-images/build_bl1nk_agent.py or _make_sandbox_image())
 rust_image = (
     modal.Image.debian_slim(python_version="3.12")
     # Layer 1: cached, runs once per toolchain bump.

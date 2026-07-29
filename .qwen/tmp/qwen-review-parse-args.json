@@ -1,0 +1,15 @@
+{
+  "target": {
+    "type": "pr-number",
+    "number": 5
+  },
+  "effort": "high",
+  "effortSource": "default",
+  "comment": {
+    "requested": false,
+    "effective": false
+  },
+  "extraTokens": [],
+  "unknownFlags": [],
+  "warnings": []
+}

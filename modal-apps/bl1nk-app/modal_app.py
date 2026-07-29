@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import sys
 import threading
 import time
 import uuid
@@ -7,7 +9,8 @@ from typing import Any, Optional
 
 import modal
 
-from build_image import SHARED_INSTALL_COMMANDS
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "modal-images"))
+from build_bl1nk_agent import SHARED_INSTALL_COMMANDS
 
 APP_NAME = "bl1nk"
 image = modal.Image.from_name("bl1nk-agent:latest")
