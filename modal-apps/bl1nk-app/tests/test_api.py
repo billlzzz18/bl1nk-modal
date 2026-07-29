@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import modal
-import pytest
 from fastapi.testclient import TestClient
 
 import modal_sandbox_app as modal_app

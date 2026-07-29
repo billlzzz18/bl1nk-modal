@@ -1,4 +1,4 @@
-from modal import Image, App, Sandbox
+from modal import Image, App
 
 app = App("sandbox-runner")
 
@@ -25,6 +25,6 @@ sandbox_image = (
 
 @app.function(image=sandbox_image)
 def run(cmd: str = "sleep infinity", timeout: int = 3600):
-    import subprocess, os
+    import subprocess
     cmd_parts = ["bash","-lc",cmd] if isinstance(cmd,str) else cmd
     return subprocess.run(cmd_parts, timeout=timeout).returncode

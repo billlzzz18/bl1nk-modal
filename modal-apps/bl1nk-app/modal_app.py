@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import sys
 import threading
 import time
 import uuid
@@ -9,8 +8,35 @@ from typing import Any, Optional
 
 import modal
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "modal-images"))
-from build_bl1nk_agent import SHARED_INSTALL_COMMANDS
+# ponytail: inline because Modal containers don't have modal-images/ on sys.path.
+# Keep in sync with build_bl1nk_agent.py SHARED_INSTALL_COMMANDS.
+SHARED_INSTALL_COMMANDS = [
+    "curl https://sh.rustup.rs -sSf | sh -s -- -y",
+    "ln -sf /root/.cargo/bin/* /usr/local/bin/",
+    "rustup default stable",
+    "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
+    "apt-get install -y nodejs",
+    "curl -fsSL https://bun.sh/install | bash",
+    "ln -sf /root/.bun/bin/bun /usr/local/bin/",
+    'curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg',
+    'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list',
+    "apt-get update",
+    "apt-get install -y gh",
+    "curl -fsSL https://claude.ai/install.sh | bash",
+    "/root/.local/bin/claude --version",
+    "curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar -xz",
+    "mv ripgrep-14.1.1-x86_64-unknown-linux-musl/rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg",
+    "rg --version || true",
+    "curl -fsSL -o /tmp/hermes-install.sh https://hermes-agent.nousresearch.com/install.sh && bash /tmp/hermes-install.sh",
+    "curl -fsSL -o /tmp/qwen-install.sh https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh && bash /tmp/qwen-install.sh",
+    "rm -rf /usr/local/lib/hermes-agent",
+    "rm -rf /tmp/* /var/tmp/*",
+    "ln -sf /root/.local/bin/qwen /usr/local/bin/qwen",
+    "ln -sf /root/.local/bin/claude /usr/local/bin/claude",
+    "ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo",
+    "ln -sf /root/.cargo/bin/rustup /usr/local/bin/rustup",
+    "ln -sf /root/.cargo/bin/rustc /usr/local/bin/rustc",
+]
 
 APP_NAME = "bl1nk"
 image = modal.Image.from_name("bl1nk-agent:latest")

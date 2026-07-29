@@ -7,8 +7,6 @@ Pattern from modal-images/search_service.py.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import time
-import uuid
 
 
 app = FastAPI(title="BL1NK Unified Agent App", version="1.0.0")

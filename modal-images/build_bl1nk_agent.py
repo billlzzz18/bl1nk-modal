@@ -1,11 +1,11 @@
 """Build and publish bl1nk-agent image."""
-from _tags import publish_versioned
-
 import modal
 
 MAJOR_VERSION = "v1"
 
-app = modal.App.lookup("bl1nk-agent-build", create_if_missing=True)
+# ponytail: app + entrypoint guarded so modal_app.py can import
+# SHARED_INSTALL_COMMANDS without triggering App.lookup at import time.
+app = None
 
 # Shared install commands used by both this build script and modal_app.py's
 # _make_sandbox_image(). Keep in sync — changes here must be reflected in
@@ -80,8 +80,10 @@ def build_image() -> modal.Image:
     )
 
 
-@app.local_entrypoint()
-def main():
+if __name__ == "__main__":
+    from _tags import publish_versioned
+
+    app = modal.App.lookup("bl1nk-agent-build", create_if_missing=True)
     img = build_image()
     with modal.enable_output():
         built = img.build(app)
