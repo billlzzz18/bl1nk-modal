@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
-import modal_app
 
 
 def _build_test_app():
     from fastapi import FastAPI
+
     api = FastAPI()
 
     @api.get("/health")

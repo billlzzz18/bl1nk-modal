@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from tools.environments.modal_utils import (
+from .modal_utils import (
     BaseModalExecutionEnvironment,
     ModalExecStart,
     PreparedModalExec,
@@ -36,9 +36,15 @@ class _ManagedModalExecHandle:
 class ManagedModalEnvironment(BaseModalExecutionEnvironment):
     """Gateway-owned Modal sandbox with Hermes-compatible execute/cleanup."""
 
-    _CONNECT_TIMEOUT_SECONDS = _request_timeout_env("TERMINAL_MANAGED_MODAL_CONNECT_TIMEOUT_SECONDS", 1.0)
-    _POLL_READ_TIMEOUT_SECONDS = _request_timeout_env("TERMINAL_MANAGED_MODAL_POLL_READ_TIMEOUT_SECONDS", 5.0)
-    _CANCEL_READ_TIMEOUT_SECONDS = _request_timeout_env("TERMINAL_MANAGED_MODAL_CANCEL_READ_TIMEOUT_SECONDS", 5.0)
+    _CONNECT_TIMEOUT_SECONDS = _request_timeout_env(
+        "TERMINAL_MANAGED_MODAL_CONNECT_TIMEOUT_SECONDS", 1.0
+    )
+    _POLL_READ_TIMEOUT_SECONDS = _request_timeout_env(
+        "TERMINAL_MANAGED_MODAL_POLL_READ_TIMEOUT_SECONDS", 5.0
+    )
+    _CANCEL_READ_TIMEOUT_SECONDS = _request_timeout_env(
+        "TERMINAL_MANAGED_MODAL_CANCEL_READ_TIMEOUT_SECONDS", 5.0
+    )
     _client_timeout_grace_seconds = 10.0
     _interrupt_output = "[Command interrupted - Modal sandbox exec cancelled]"
     _unexpected_error_prefix = "Managed Modal exec failed"
@@ -226,10 +232,15 @@ class ManagedModalEnvironment(BaseModalExecutionEnvironment):
                 "credential files inside the sandbox."
             )
 
-    def _request(self, method: str, path: str, *,
-                 json: Dict[str, Any] | None = None,
-                 timeout: int = 30,
-                 extra_headers: Dict[str, str] | None = None) -> requests.Response:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Dict[str, Any] | None = None,
+        timeout: int = 30,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> requests.Response:
         headers = {
             "Authorization": f"Bearer {self._nous_user_token}",
             "Content-Type": "application/json",

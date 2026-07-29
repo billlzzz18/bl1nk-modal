@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import threading
 import time
 import uuid
@@ -12,13 +11,12 @@ import modal
 # Keep in sync with build_bl1nk_agent.py SHARED_INSTALL_COMMANDS.
 SHARED_INSTALL_COMMANDS = [
     "curl https://sh.rustup.rs -sSf | sh -s -- -y",
-    "ln -sf /root/.cargo/bin/* /usr/local/bin/",
     "rustup default stable",
     "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
     "apt-get install -y nodejs",
     "curl -fsSL https://bun.sh/install | bash",
     "ln -sf /root/.bun/bin/bun /usr/local/bin/",
-    'curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg',
+    "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg",
     'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list',
     "apt-get update",
     "apt-get install -y gh",
@@ -33,9 +31,13 @@ SHARED_INSTALL_COMMANDS = [
     "rm -rf /tmp/* /var/tmp/*",
     "ln -sf /root/.local/bin/qwen /usr/local/bin/qwen",
     "ln -sf /root/.local/bin/claude /usr/local/bin/claude",
-    "ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo",
-    "ln -sf /root/.cargo/bin/rustup /usr/local/bin/rustup",
-    "ln -sf /root/.cargo/bin/rustc /usr/local/bin/rustc",
+    # Move Rust toolchain to workspace-owned dir so workspace user can write
+    "mv /root/.rustup /home/workspace/.rustup",
+    "mv /root/.cargo /home/workspace/.cargo",
+    "ln -sf /home/workspace/.cargo/bin/cargo /usr/local/bin/cargo",
+    "ln -sf /home/workspace/.cargo/bin/rustup /usr/local/bin/rustup",
+    "ln -sf /home/workspace/.cargo/bin/rustc /usr/local/bin/rustc",
+    "chown -R workspace:workspace /home/workspace/.rustup /home/workspace/.cargo",
 ]
 
 APP_NAME = "bl1nk"
@@ -48,6 +50,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # AsyncWorker — background event loop for Modal SDK async calls
 # ---------------------------------------------------------------------------
+
 
 class _AsyncWorker:
     def __init__(self):
@@ -85,6 +88,7 @@ class _AsyncWorker:
 # SandboxManager — create/exec/destroy with auto-timeout
 # ---------------------------------------------------------------------------
 
+
 class SandboxManager:
     """Modal sandbox manager with auto-timeout to prevent cost leaks."""
 
@@ -115,7 +119,8 @@ class SandboxManager:
     def _cleanup_expired(self):
         now = time.time()
         expired = [
-            task_id for task_id, info in self._sandboxes.items()
+            task_id
+            for task_id, info in self._sandboxes.items()
             if now - info["created_at"] > info["max_lifetime"]
         ]
         for task_id in expired:
@@ -136,7 +141,8 @@ class SandboxManager:
         async def _create():
             modal_app = await modal.App.lookup.aio(APP_NAME, create_if_missing=True)
             sandbox = await modal.Sandbox.create.aio(
-                "sleep", "infinity",
+                "sleep",
+                "infinity",
                 image=img,
                 app=modal_app,
                 timeout=timeout,
@@ -153,7 +159,8 @@ class SandboxManager:
             if not modal_task_id:
                 sandbox_repr = repr(sandbox)
                 import re
-                match = re.search(r'ta-[A-Za-z0-9]+', sandbox_repr)
+
+                match = re.search(r"ta-[A-Za-z0-9]+", sandbox_repr)
                 if match:
                     modal_task_id = match.group(0)
             return modal_app, sandbox, modal_task_id
@@ -166,7 +173,12 @@ class SandboxManager:
             "created_at": time.time(),
             "max_lifetime": max_lifetime,
         }
-        logger.info("Sandbox created: task=%s, modal_task=%s (max_lifetime=%ds)", task_id, modal_task_id, max_lifetime)
+        logger.info(
+            "Sandbox created: task=%s, modal_task=%s (max_lifetime=%ds)",
+            task_id,
+            modal_task_id,
+            max_lifetime,
+        )
         return task_id
 
     def exec(
@@ -184,6 +196,7 @@ class SandboxManager:
 
         # If we don't have modal_task_id yet, try to get it from env
         if not entry.get("modal_task_id"):
+
             async def _get_task_id():
                 proc = await sandbox.exec.aio("bash", "-c", "echo $MODAL_TASK_ID")
                 output = await proc.stdout.read.aio()
@@ -223,13 +236,17 @@ class SandboxManager:
         now = time.time()
         result = []
         for task_id, info in self._sandboxes.items():
-            result.append({
-                "task_id": task_id,
-                "modal_task_id": info.get("modal_task_id"),
-                "age_seconds": int(now - info["created_at"]),
-                "max_lifetime": info["max_lifetime"],
-                "remaining_seconds": max(0, int(info["max_lifetime"] - (now - info["created_at"]))),
-            })
+            result.append(
+                {
+                    "task_id": task_id,
+                    "modal_task_id": info.get("modal_task_id"),
+                    "age_seconds": int(now - info["created_at"]),
+                    "max_lifetime": info["max_lifetime"],
+                    "remaining_seconds": max(
+                        0, int(info["max_lifetime"] - (now - info["created_at"]))
+                    ),
+                }
+            )
         return result
 
     def destroy_sandbox(self, task_id: str) -> bool:
@@ -273,12 +290,19 @@ def get_sandbox_manager() -> SandboxManager:
 # Image definition
 # ---------------------------------------------------------------------------
 
+
 def _make_sandbox_image() -> modal.Image:
     return (
         modal.Image.debian_slim(python_version="3.12")
         .apt_install(
-            "curl", "git", "ca-certificates", "build-essential",
-            "pkg-config", "libssl-dev", "zip", "unzip",
+            "curl",
+            "git",
+            "ca-certificates",
+            "build-essential",
+            "pkg-config",
+            "libssl-dev",
+            "zip",
+            "unzip",
         )
         .run_commands(
             "useradd -m -s /bin/bash workspace",
@@ -294,12 +318,14 @@ def _make_sandbox_image() -> modal.Image:
             "npm --version",
             "bun --version",
         )
-        .env({
-            "HOME": "/home/workspace",
-            "PATH": "/home/workspace/.local/bin:/usr/local/bin:/usr/bin:/bin",
-            "RUSTUP_HOME": "/root/.rustup",
-            "CARGO_HOME": "/root/.cargo",
-        })
+        .env(
+            {
+                "HOME": "/home/workspace",
+                "PATH": "/home/workspace/.local/bin:/usr/local/bin:/usr/bin:/bin",
+                "RUSTUP_HOME": "/home/workspace/.rustup",
+                "CARGO_HOME": "/home/workspace/.cargo",
+            }
+        )
     )
 
 
@@ -307,9 +333,11 @@ def _make_sandbox_image() -> modal.Image:
 # Modal Functions
 # ---------------------------------------------------------------------------
 
+
 @app.function(image=_make_sandbox_image())
 def dev() -> dict[str, str]:
     import shutil
+
     tools = ["git", "gh", "node", "npm", "bun", "cargo", "rustc", "claude"]
     return {t: shutil.which(t) or "not found" for t in tools}
 
@@ -342,7 +370,13 @@ def fastapi_app():
         return {
             "app": "bl1nk",
             "endpoints": {
-                "sandbox": ["/sandbox/create", "/sandbox/exec/{task_id}", "/sandbox/list", "/sandbox/modal-task/{task_id}", "/sandbox/destroy/{task_id}"],
+                "sandbox": [
+                    "/sandbox/create",
+                    "/sandbox/exec/{task_id}",
+                    "/sandbox/list",
+                    "/sandbox/modal-task/{task_id}",
+                    "/sandbox/destroy/{task_id}",
+                ],
                 "legacy": ["/health", "/run/{mode}/{agent}"],
             },
         }

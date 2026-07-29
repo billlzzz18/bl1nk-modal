@@ -9,8 +9,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from tools.environments.base import BaseEnvironment, _popen_bash
-from tools.environments.file_sync import (
+from .base import BaseEnvironment, _popen_bash
+from .file_sync import (
     FileSyncManager,
     iter_sync_files,
     quoted_mkdir_command,
@@ -42,8 +42,15 @@ class SSHEnvironment(BaseEnvironment):
     Uses SSH ControlMaster for connection reuse.
     """
 
-    def __init__(self, host: str, user: str, cwd: str = "~",
-                 timeout: int = 60, port: int = 22, key_path: str = ""):
+    def __init__(
+        self,
+        host: str,
+        user: str,
+        cwd: str = "~",
+        timeout: int = 60,
+        port: int = 22,
+        key_path: str = "",
+    ):
         super().__init__(cwd=cwd, timeout=timeout)
         self.host = host
         self.user = user
@@ -60,9 +67,7 @@ class SSHEnvironment(BaseEnvironment):
         # deeply-nested $TMPDIR (e.g. /var/folders/xx/yy/T/). Hashing the
         # triple keeps the path stable across reconnects so ControlMaster
         # reuse still works.
-        _socket_id = hashlib.sha256(
-            f"{user}@{host}:{port}".encode()
-        ).hexdigest()[:16]
+        _socket_id = hashlib.sha256(f"{user}@{host}:{port}".encode()).hexdigest()[:16]
         self.control_socket = self.control_dir / f"{_socket_id}.sock"
         _ensure_ssh_available()
         self._establish_connection()
@@ -229,9 +234,7 @@ class SSHEnvironment(BaseEnvironment):
                     ) from exc
 
                 if rel_remote == "." or rel_remote.startswith("../"):
-                    raise RuntimeError(
-                        f"remote path {remote_path!r} escapes sync base {base!r}"
-                    )
+                    raise RuntimeError(f"remote path {remote_path!r} escapes sync base {base!r}")
 
                 staged = os.path.join(staging, rel_remote)
                 os.makedirs(os.path.dirname(staged), exist_ok=True)
@@ -260,7 +263,9 @@ class SSHEnvironment(BaseEnvironment):
             )
             try:
                 ssh_proc = subprocess.Popen(
-                    ssh_cmd, stdin=tar_proc.stdout, stdout=subprocess.PIPE,
+                    ssh_cmd,
+                    stdin=tar_proc.stdout,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
             except Exception:
@@ -316,7 +321,9 @@ class SSHEnvironment(BaseEnvironment):
                 timeout=120,
             )
         if result.returncode != 0:
-            raise RuntimeError(f"SSH bulk download failed: {result.stderr.decode(errors='replace').strip()}")
+            raise RuntimeError(
+                f"SSH bulk download failed: {result.stderr.decode(errors='replace').strip()}"
+            )
 
     def _ssh_delete(self, remote_paths: list[str]) -> None:
         """Batch-delete remote files in one SSH call."""
@@ -340,9 +347,14 @@ class SSHEnvironment(BaseEnvironment):
     # Execution
     # ------------------------------------------------------------------
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False,
-                  timeout: int = 120,
-                  stdin_data: str | None = None) -> subprocess.Popen:
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ) -> subprocess.Popen:
         """Spawn an SSH process that runs bash on the remote host."""
         cmd = self._build_ssh_command()
         if login:
@@ -359,8 +371,14 @@ class SSHEnvironment(BaseEnvironment):
 
         if self.control_socket.exists():
             try:
-                cmd = ["ssh", "-o", f"ControlPath={self.control_socket}",
-                       "-O", "exit", f"{self.user}@{self.host}"]
+                cmd = [
+                    "ssh",
+                    "-o",
+                    f"ControlPath={self.control_socket}",
+                    "-O",
+                    "exit",
+                    f"{self.user}@{self.host}",
+                ]
                 subprocess.run(
                     cmd,
                     capture_output=True,

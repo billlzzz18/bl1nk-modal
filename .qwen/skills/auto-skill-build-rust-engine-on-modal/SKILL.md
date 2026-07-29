@@ -55,7 +55,8 @@ rust_image = (
     .apt_install("git", "clang", "pkg-config")
     .run_commands(
         "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
-        "export PATH=$PATH:$HOME/.cargo/bin",
+        # Rust installed to /root/.cargo during build; SHARED_INSTALL_COMMANDS
+        # later moves it to /home/workspace/.cargo and symlinks to /usr/local/bin
         "pip install maturin",
     )
     # Layer 2: invalidated on engine code change.

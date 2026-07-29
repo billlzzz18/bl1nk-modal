@@ -16,8 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from tools.environments.base import BaseEnvironment, _popen_bash
-from tools.environments.local import (
+from .base import BaseEnvironment, _popen_bash
+from .local import (
     _HERMES_PROVIDER_ENV_BLOCKLIST,
     _is_hermes_internal_secret,
 )
@@ -174,12 +174,17 @@ def reap_orphan_containers(
     docker = docker_exe or find_docker() or "docker"
     filters = ["--filter", "label=hermes-agent=1", "--filter", "status=exited"]
     if profile_filter:
-        filters.extend(["--filter", f"label=hermes-profile={_sanitize_label_value(profile_filter)}"])
+        filters.extend(
+            ["--filter", f"label=hermes-profile={_sanitize_label_value(profile_filter)}"]
+        )
 
     try:
         listing = subprocess.run(
             [docker, "ps", "-a", *filters, "--format", "{{.ID}}"],
-            capture_output=True, text=True, timeout=15, check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
             stdin=subprocess.DEVNULL,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -188,7 +193,8 @@ def reap_orphan_containers(
     if listing.returncode != 0:
         logger.debug(
             "orphan reaper docker ps returned %d: %s",
-            listing.returncode, listing.stderr.strip(),
+            listing.returncode,
+            listing.stderr.strip(),
         )
         return 0
 
@@ -200,6 +206,7 @@ def reap_orphan_containers(
     # long enough ago.  Doing this per-container (rather than bulk inspect)
     # keeps the failure blast radius to one container at a time.
     import datetime
+
     now = datetime.datetime.now(datetime.timezone.utc)
     removed = 0
     for cid in candidate_ids:
@@ -213,19 +220,23 @@ def reap_orphan_containers(
         try:
             result = subprocess.run(
                 [docker, "rm", "-f", cid],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
                 stdin=subprocess.DEVNULL,
             )
             if result.returncode == 0:
                 removed += 1
                 logger.info(
                     "Reaped orphan container %s (exited %d seconds ago)",
-                    cid[:12], int(age),
+                    cid[:12],
+                    int(age),
                 )
             else:
                 logger.debug(
                     "docker rm -f %s failed: %s",
-                    cid[:12], result.stderr.strip(),
+                    cid[:12],
+                    result.stderr.strip(),
                 )
         except (subprocess.TimeoutExpired, OSError) as e:
             logger.debug("orphan reaper docker rm %s failed: %s", cid[:12], e)
@@ -243,7 +254,10 @@ def _container_finished_at(docker_exe: str, container_id: str):
     try:
         result = subprocess.run(
             [docker_exe, "inspect", "--format", "{{.State.FinishedAt}}", container_id],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
             stdin=subprocess.DEVNULL,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -257,10 +271,12 @@ def _container_finished_at(docker_exe: str, container_id: str):
     # Docker emits RFC3339 with nanoseconds (e.g. "2026-05-28T13:45:00.123456789Z").
     # Python's fromisoformat handles microseconds but not nanoseconds; trim.
     import re as _re
+
     raw = _re.sub(r"(\.\d{6})\d+", r"\1", raw)
     raw = raw.replace("Z", "+00:00")
     try:
         import datetime
+
         return datetime.datetime.fromisoformat(raw)
     except ValueError as e:
         logger.debug("could not parse FinishedAt %r for %s: %s", raw, container_id[:12], e)
@@ -334,13 +350,20 @@ def find_docker() -> Optional[str]:
 # such as unprivileged LXCs. ``--cpus``/``--memory`` are gated for the same
 # reason.
 _BASE_SECURITY_ARGS = [
-    "--cap-drop", "ALL",
-    "--cap-add", "DAC_OVERRIDE",
-    "--cap-add", "CHOWN",
-    "--cap-add", "FOWNER",
-    "--security-opt", "no-new-privileges",
-    "--tmpfs", "/tmp:rw,nosuid,size=512m",
-    "--tmpfs", "/var/tmp:rw,noexec,nosuid,size=256m",
+    "--cap-drop",
+    "ALL",
+    "--cap-add",
+    "DAC_OVERRIDE",
+    "--cap-add",
+    "CHOWN",
+    "--cap-add",
+    "FOWNER",
+    "--security-opt",
+    "no-new-privileges",
+    "--tmpfs",
+    "/tmp:rw,nosuid,size=512m",
+    "--tmpfs",
+    "/var/tmp:rw,noexec,nosuid,size=256m",
 ]
 
 # Default per-container PID limit. Applied as ``--pids-limit`` only when the
@@ -359,8 +382,10 @@ _RUN_TMPFS_EXEC = "--tmpfs", "/run:rw,exec,nosuid,size=64m"
 # Skipped when --user is passed because the container already starts
 # unprivileged and never needs to switch.
 _PRIVDROP_CAP_ARGS = [
-    "--cap-add", "SETUID",
-    "--cap-add", "SETGID",
+    "--cap-add",
+    "SETUID",
+    "--cap-add",
+    "SETGID",
 ]
 
 
@@ -391,8 +416,7 @@ def _image_uses_init_entrypoint(docker_exe: str, image: str) -> bool:
     """
     try:
         result = subprocess.run(
-            [docker_exe, "image", "inspect", image,
-             "--format", "{{json .Config.Entrypoint}}"],
+            [docker_exe, "image", "inspect", image, "--format", "{{json .Config.Entrypoint}}"],
             capture_output=True,
             text=True,
             timeout=15,
@@ -406,7 +430,9 @@ def _image_uses_init_entrypoint(docker_exe: str, image: str) -> bool:
         # for non-s6 images, so don't block on this.
         logger.debug(
             "Docker: image inspect for %s returned %d (stderr=%s)",
-            image, result.returncode, result.stderr.strip(),
+            image,
+            result.returncode,
+            result.stderr.strip(),
         )
         return False
     raw = (result.stdout or "").strip()
@@ -473,9 +499,20 @@ def _cgroup_limits_available(image: str) -> bool:
 
     try:
         result = subprocess.run(
-            [docker_exe, "run", "--rm",
-             "--cpus", "0.5", "--memory", "64m", "--pids-limit", "32",
-             image, "sleep", "0"],
+            [
+                docker_exe,
+                "run",
+                "--rm",
+                "--cpus",
+                "0.5",
+                "--memory",
+                "64m",
+                "--pids-limit",
+                "32",
+                image,
+                "sleep",
+                "0",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
@@ -553,8 +590,7 @@ def _ensure_docker_available() -> None:
     else:
         if result.returncode != 0:
             logger.error(
-                "Docker backend selected but '%s version' failed "
-                "(exit code %d, stderr=%s)",
+                "Docker backend selected but '%s version' failed (exit code %d, stderr=%s)",
                 docker_exe,
                 result.returncode,
                 result.stderr.strip(),
@@ -645,12 +681,12 @@ class DockerEnvironment(BaseEnvironment):
         # Persistent workspace via bind mounts from a configurable host directory
         # (TERMINAL_SANDBOX_DIR, default ~/.hermes/sandboxes/). Non-persistent
         # mode uses tmpfs (ephemeral, fast, gone on cleanup).
-        from tools.environments.base import get_sandbox_dir
+        from .base import get_sandbox_dir
 
         # User-configured volume mounts (from config.yaml docker_volumes)
         volume_args = []
         workspace_explicitly_mounted = False
-        for vol in (volumes or []):
+        for vol in volumes or []:
             if not isinstance(vol, str):
                 logger.warning(f"Docker volume entry is not a string: {vol!r}")
                 continue
@@ -672,7 +708,9 @@ class DockerEnvironment(BaseEnvironment):
             and not workspace_explicitly_mounted
         )
         if auto_mount_cwd and host_cwd and not os.path.isdir(host_cwd_abs):
-            logger.debug(f"Skipping docker cwd mount: host_cwd is not a valid directory: {host_cwd}")
+            logger.debug(
+                f"Skipping docker cwd mount: host_cwd is not a valid directory: {host_cwd}"
+            )
 
         self._workspace_dir: Optional[str] = None
         self._home_dir: Optional[str] = None
@@ -681,24 +719,37 @@ class DockerEnvironment(BaseEnvironment):
             sandbox = get_sandbox_dir() / "docker" / task_id
             self._home_dir = str(sandbox / "home")
             os.makedirs(self._home_dir, exist_ok=True)
-            writable_args.extend([
-                "-v", f"{self._home_dir}:/root",
-            ])
+            writable_args.extend(
+                [
+                    "-v",
+                    f"{self._home_dir}:/root",
+                ]
+            )
             if not bind_host_cwd and not workspace_explicitly_mounted:
                 self._workspace_dir = str(sandbox / "workspace")
                 os.makedirs(self._workspace_dir, exist_ok=True)
-                writable_args.extend([
-                    "-v", f"{self._workspace_dir}:/workspace",
-                ])
+                writable_args.extend(
+                    [
+                        "-v",
+                        f"{self._workspace_dir}:/workspace",
+                    ]
+                )
         else:
             if not bind_host_cwd and not workspace_explicitly_mounted:
-                writable_args.extend([
-                    "--tmpfs", "/workspace:rw,exec,size=10g",
-                ])
-            writable_args.extend([
-                "--tmpfs", "/home:rw,exec,size=1g",
-                "--tmpfs", "/root:rw,exec,size=1g",
-            ])
+                writable_args.extend(
+                    [
+                        "--tmpfs",
+                        "/workspace:rw,exec,size=10g",
+                    ]
+                )
+            writable_args.extend(
+                [
+                    "--tmpfs",
+                    "/home:rw,exec,size=1g",
+                    "--tmpfs",
+                    "/root:rw,exec,size=1g",
+                ]
+            )
 
         if bind_host_cwd:
             logger.info(f"Mounting configured host cwd to /workspace: {host_cwd_abs}")
@@ -729,13 +780,16 @@ class DockerEnvironment(BaseEnvironment):
                     continue
                 if not src.is_file():
                     logger.warning(
-                        "Docker: skipping credential mount — source not found: %s", src,
+                        "Docker: skipping credential mount — source not found: %s",
+                        src,
                     )
                     continue
-                volume_args.extend([
-                    "-v",
-                    f"{mount_entry['host_path']}:{mount_entry['container_path']}:ro",
-                ])
+                volume_args.extend(
+                    [
+                        "-v",
+                        f"{mount_entry['host_path']}:{mount_entry['container_path']}:ro",
+                    ]
+                )
                 logger.info(
                     "Docker: mounting credential %s -> %s",
                     mount_entry["host_path"],
@@ -752,10 +806,12 @@ class DockerEnvironment(BaseEnvironment):
                         src,
                     )
                     continue
-                volume_args.extend([
-                    "-v",
-                    f"{skills_mount['host_path']}:{skills_mount['container_path']}:ro",
-                ])
+                volume_args.extend(
+                    [
+                        "-v",
+                        f"{skills_mount['host_path']}:{skills_mount['container_path']}:ro",
+                    ]
+                )
                 logger.info(
                     "Docker: mounting skills dir %s -> %s",
                     skills_mount["host_path"],
@@ -774,10 +830,12 @@ class DockerEnvironment(BaseEnvironment):
                         src,
                     )
                     continue
-                volume_args.extend([
-                    "-v",
-                    f"{cache_mount['host_path']}:{cache_mount['container_path']}:ro",
-                ])
+                volume_args.extend(
+                    [
+                        "-v",
+                        f"{cache_mount['host_path']}:{cache_mount['container_path']}:ro",
+                    ]
+                )
                 logger.info(
                     "Docker: mounting cache dir %s -> %s",
                     cache_mount["host_path"],
@@ -837,7 +895,7 @@ class DockerEnvironment(BaseEnvironment):
         # User-supplied extra docker run flags (docker_extra_args in config.yaml).
         # Appended last so they can override defaults if needed.
         validated_extra = []
-        for arg in (extra_args or []):
+        for arg in extra_args or []:
             if not isinstance(arg, str):
                 logger.warning("Ignoring non-string docker_extra_args entry: %r", arg)
                 continue
@@ -866,9 +924,12 @@ class DockerEnvironment(BaseEnvironment):
         profile_name = _sanitize_label_value(_get_active_profile_name())
         task_label = _sanitize_label_value(task_id)
         label_args = [
-            "--label", "hermes-agent=1",
-            "--label", f"hermes-task-id={task_label}",
-            "--label", f"hermes-profile={profile_name}",
+            "--label",
+            "hermes-agent=1",
+            "--label",
+            f"hermes-task-id={task_label}",
+            "--label",
+            f"hermes-profile={profile_name}",
         ]
         # Save args for container recreation on "No such container" recovery.
         self._image = image
@@ -914,13 +975,18 @@ class DockerEnvironment(BaseEnvironment):
                         logger.warning(
                             "Failed to start existing container %s (state=%s): "
                             "%s — falling back to a fresh container.",
-                            container_id[:12], state, e,
+                            container_id[:12],
+                            state,
+                            e,
                         )
                         self._container_id = None
                 if self._container_id:
                     logger.info(
                         "Reusing container %s (task=%s, profile=%s, prior state=%s)",
-                        container_id[:12], task_label, profile_name, state,
+                        container_id[:12],
+                        task_label,
+                        profile_name,
+                        state,
                     )
                     reused = True
 
@@ -930,14 +996,19 @@ class DockerEnvironment(BaseEnvironment):
             # there creates two competing inits and breaks startup (#34628).
             init_args = [] if image_uses_s6_init else ["--init"]
             run_cmd = [
-                self._docker_exe, "run", "-d",
+                self._docker_exe,
+                "run",
+                "-d",
                 *init_args,
-                "--name", container_name,
+                "--name",
+                container_name,
                 *label_args,
-                "-w", cwd,
+                "-w",
+                cwd,
                 *all_run_args,
                 image,
-                "sleep", "infinity",  # no fixed lifetime — idle reaper handles cleanup
+                "sleep",
+                "infinity",  # no fixed lifetime — idle reaper handles cleanup
             ]
             logger.debug(f"Starting container: {' '.join(run_cmd)}")
             try:
@@ -959,11 +1030,13 @@ class DockerEnvironment(BaseEnvironment):
                 # re-raising. See #7439.
                 logger.warning(
                     "docker run failed for %s, cleaning up orphaned container: %s",
-                    container_name, e,
+                    container_name,
+                    e,
                 )
                 subprocess.run(
                     [self._docker_exe, "rm", "-f", container_name],
-                    capture_output=True, timeout=10,
+                    capture_output=True,
+                    timeout=10,
                     stdin=subprocess.DEVNULL,
                 )
                 raise
@@ -990,6 +1063,7 @@ class DockerEnvironment(BaseEnvironment):
         passthrough_keys: set[str] = set()
         try:
             from tools.env_passthrough import get_all_passthrough
+
             passthrough_keys = set(get_all_passthrough())
         except Exception:
             pass
@@ -998,9 +1072,7 @@ class DockerEnvironment(BaseEnvironment):
         # keys are filtered. Also strip Hermes-internal dynamic secrets
         # (AUXILIARY_*_API_KEY / _BASE_URL, GATEWAY_RELAY_* auth) that the
         # name-based blocklist doesn't cover — see _is_hermes_internal_secret.
-        _implicit_forward = {
-            k for k in passthrough_keys if not _is_hermes_internal_secret(k)
-        }
+        _implicit_forward = {k for k in passthrough_keys if not _is_hermes_internal_secret(k)}
         forward_keys = explicit_forward_keys | (_implicit_forward - _HERMES_PROVIDER_ENV_BLOCKLIST)
         hermes_env = _load_hermes_env_vars() if forward_keys else {}
         for key in sorted(forward_keys):
@@ -1015,9 +1087,14 @@ class DockerEnvironment(BaseEnvironment):
             args.extend(["-e", f"{key}={exec_env[key]}"])
         return args
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False,
-                  timeout: int = 120,
-                  stdin_data: str | None = None) -> subprocess.Popen:
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ) -> subprocess.Popen:
         """Spawn a bash process inside the Docker container."""
         assert self._container_id, "Container not started"
         cmd = [self._docker_exe, "exec"]
@@ -1062,7 +1139,8 @@ class DockerEnvironment(BaseEnvironment):
         """
         old_id = (self._container_id or "")[:12]
         logger.warning(
-            "Container %s appears to be gone — attempting recovery", old_id,
+            "Container %s appears to be gone — attempting recovery",
+            old_id,
         )
         self._container_id = None
 
@@ -1079,7 +1157,10 @@ class DockerEnvironment(BaseEnvironment):
                 try:
                     subprocess.run(
                         [self._docker_exe, "start", cid],
-                        capture_output=True, text=True, timeout=30, check=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        check=True,
                         stdin=subprocess.DEVNULL,
                     )
                     self._container_id = cid
@@ -1094,30 +1175,41 @@ class DockerEnvironment(BaseEnvironment):
                 return False
             try:
                 import uuid as _uuid
+
                 new_name = f"hermes-{_uuid.uuid4().hex[:8]}"
                 init_args = [] if self._image_uses_s6_init else ["--init"]
                 label_args = []
                 for k, v in self._labels.items():
                     label_args.extend(["--label", f"{k}={v}"])
                 run_cmd = [
-                    self._docker_exe, "run", "-d",
+                    self._docker_exe,
+                    "run",
+                    "-d",
                     *init_args,
-                    "--name", new_name,
+                    "--name",
+                    new_name,
                     *label_args,
-                    "-w", self.cwd,
+                    "-w",
+                    self.cwd,
                     *self._all_run_args,
                     self._image,
-                    "sleep", "infinity",
+                    "sleep",
+                    "infinity",
                 ]
                 result = subprocess.run(
-                    run_cmd, capture_output=True, text=True, timeout=120, check=True,
+                    run_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=True,
                     stdin=subprocess.DEVNULL,
                 )
                 self._container_id = result.stdout.strip()
                 self._container_name = new_name
                 logger.info(
                     "Recovery: created fresh container %s (%s)",
-                    new_name, self._container_id[:12],
+                    new_name,
+                    self._container_id[:12],
                 )
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
                 logger.error("Recovery: failed to create new container: %s", e)
@@ -1154,7 +1246,7 @@ class DockerEnvironment(BaseEnvironment):
     @staticmethod
     def _storage_opt_supported() -> bool:
         """Check if Docker's storage driver supports --storage-opt size=.
-        
+
         Only overlay2 on XFS with pquota supports per-container disk quotas.
         Ubuntu (and most distros) default to ext4, where this flag errors out.
         """
@@ -1165,7 +1257,9 @@ class DockerEnvironment(BaseEnvironment):
             docker = find_docker() or "docker"
             result = subprocess.run(
                 [docker, "info", "--format", "{{.Driver}}"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
                 stdin=subprocess.DEVNULL,
             )
             driver = result.stdout.strip().lower()
@@ -1176,16 +1270,21 @@ class DockerEnvironment(BaseEnvironment):
             # Probe by attempting a dry-ish run — the fastest reliable check.
             probe = subprocess.run(
                 [docker, "create", "--storage-opt", "size=1m", "hello-world"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True,
+                text=True,
+                timeout=15,
                 stdin=subprocess.DEVNULL,
             )
             if probe.returncode == 0:
                 # Clean up the created container
                 container_id = probe.stdout.strip()
                 if container_id:
-                    subprocess.run([docker, "rm", container_id],
-                                   capture_output=True, timeout=5,
-                                   stdin=subprocess.DEVNULL)
+                    subprocess.run(
+                        [docker, "rm", container_id],
+                        capture_output=True,
+                        timeout=5,
+                        stdin=subprocess.DEVNULL,
+                    )
                 _storage_opt_ok = True
             else:
                 _storage_opt_ok = False
@@ -1194,7 +1293,9 @@ class DockerEnvironment(BaseEnvironment):
         logger.debug("Docker --storage-opt support: %s", _storage_opt_ok)
         return _storage_opt_ok
 
-    def _find_reusable_container(self, task_label: str, profile_label: str) -> Optional[tuple[str, str]]:
+    def _find_reusable_container(
+        self, task_label: str, profile_label: str
+    ) -> Optional[tuple[str, str]]:
         """Look for an existing container labeled for this (task, profile).
 
         Returns ``(container_id, state)`` on hit, ``None`` on miss / on any
@@ -1210,11 +1311,17 @@ class DockerEnvironment(BaseEnvironment):
         try:
             result = subprocess.run(
                 [
-                    self._docker_exe, "ps", "-a",
-                    "--filter", "label=hermes-agent=1",
-                    "--filter", f"label=hermes-task-id={task_label}",
-                    "--filter", f"label=hermes-profile={profile_label}",
-                    "--format", "{{.ID}}\t{{.State}}",
+                    self._docker_exe,
+                    "ps",
+                    "-a",
+                    "--filter",
+                    "label=hermes-agent=1",
+                    "--filter",
+                    f"label=hermes-task-id={task_label}",
+                    "--filter",
+                    f"label=hermes-profile={profile_label}",
+                    "--format",
+                    "{{.ID}}\t{{.State}}",
                 ],
                 capture_output=True,
                 text=True,
@@ -1228,7 +1335,8 @@ class DockerEnvironment(BaseEnvironment):
         if result.returncode != 0:
             logger.debug(
                 "docker ps probe returned %d: %s — will start a fresh container",
-                result.returncode, result.stderr.strip(),
+                result.returncode,
+                result.stderr.strip(),
             )
             return None
         lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
@@ -1336,7 +1444,8 @@ class DockerEnvironment(BaseEnvironment):
                 try:
                     subprocess.run(
                         [docker_exe, "stop", "-t", "10", container_id],
-                        capture_output=True, timeout=30,
+                        capture_output=True,
+                        timeout=30,
                         stdin=subprocess.DEVNULL,
                     )
                 except (subprocess.TimeoutExpired, OSError) as e:
@@ -1345,7 +1454,8 @@ class DockerEnvironment(BaseEnvironment):
                 try:
                     subprocess.run(
                         [docker_exe, "rm", "-f", container_id],
-                        capture_output=True, timeout=30,
+                        capture_output=True,
+                        timeout=30,
                         stdin=subprocess.DEVNULL,
                     )
                 except (subprocess.TimeoutExpired, OSError) as e:
@@ -1358,6 +1468,7 @@ class DockerEnvironment(BaseEnvironment):
         # ``_atexit_cleanup`` in terminal_tool.py which waits up to ~60s for
         # outstanding cleanups, so most exits complete the work cleanly.
         import threading
+
         t = threading.Thread(target=_do_cleanup, daemon=True, name=f"hermes-cleanup-{log_id}")
         t.start()
         self._cleanup_thread = t

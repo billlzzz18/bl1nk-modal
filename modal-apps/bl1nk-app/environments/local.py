@@ -12,7 +12,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from tools.environments.base import BaseEnvironment, _pipe_stdin
+from .base import BaseEnvironment, _pipe_stdin
 from hermes_cli._subprocess_compat import windows_hide_flags
 
 _IS_WINDOWS = platform.system() == "Windows"
@@ -32,11 +32,11 @@ def _msys_to_windows_path(cwd: str) -> str:
     if not _IS_WINDOWS or not cwd:
         return cwd
     # Match leading "/<single letter>/" or exactly "/<letter>" (bare drive root).
-    m = re.match(r'^/([a-zA-Z])(/.*)?$', cwd)
+    m = re.match(r"^/([a-zA-Z])(/.*)?$", cwd)
     if not m:
         return cwd
     drive = m.group(1).upper()
-    tail = (m.group(2) or "").replace('/', '\\')
+    tail = (m.group(2) or "").replace("/", "\\")
     return f"{drive}:{tail or chr(92)}"  # chr(92) = backslash, avoid raw-string escape
 
 
@@ -50,11 +50,11 @@ def _windows_to_msys_path(cwd: str) -> str:
     """
     if not _IS_WINDOWS or not cwd:
         return cwd
-    m = re.match(r'^([a-zA-Z]):[\\/]*(.*)$', cwd)
+    m = re.match(r"^([a-zA-Z]):[\\/]*(.*)$", cwd)
     if not m:
         return cwd
     drive = m.group(1).lower()
-    tail = (m.group(2) or "").replace('\\', '/').lstrip('/')
+    tail = (m.group(2) or "").replace("\\", "/").lstrip("/")
     return f"/{drive}/{tail}" if tail else f"/{drive}/"
 
 
@@ -111,9 +111,11 @@ _HERMES_PROVIDER_ENV_FORCE_PREFIX = "_HERMES_FORCE_"
 # unconditionally — and (b) be unrecoverable, because env_passthrough.py
 # refuses to re-allow anything in this blocklist (GHSA-rhgp-j443-p4rf).  See
 # issue #32314 discussion.
-_AWS_SDK_CREDENTIAL_ENV_VARS = frozenset({
-    "AWS_BEARER_TOKEN_BEDROCK",
-})
+_AWS_SDK_CREDENTIAL_ENV_VARS = frozenset(
+    {
+        "AWS_BEARER_TOKEN_BEDROCK",
+    }
+)
 
 
 def _build_provider_env_blocklist() -> frozenset:
@@ -122,6 +124,7 @@ def _build_provider_env_blocklist() -> frozenset:
 
     try:
         from hermes_cli.auth import PROVIDER_REGISTRY
+
         for pconfig in PROVIDER_REGISTRY.values():
             blocked.update(pconfig.api_key_env_vars)
             if pconfig.auth_type == "aws_sdk":
@@ -133,6 +136,7 @@ def _build_provider_env_blocklist() -> frozenset:
 
     try:
         from hermes_cli.config import OPTIONAL_ENV_VARS
+
         for name, metadata in OPTIONAL_ENV_VARS.items():
             category = metadata.get("category")
             if category in {"tool", "messaging"}:
@@ -142,75 +146,77 @@ def _build_provider_env_blocklist() -> frozenset:
     except ImportError:
         pass
 
-    blocked.update({
-        "OPENAI_BASE_URL",
-        "OPENAI_API_KEY",
-        "OPENAI_API_BASE",
-        "OPENAI_ORG_ID",
-        "OPENAI_ORGANIZATION",
-        "OPENROUTER_API_KEY",
-        "ANTHROPIC_BASE_URL",
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_TOKEN",
-        "LLM_MODEL",
-        "GOOGLE_API_KEY",
-        # Path to a GCP service-account JSON, not a bare key, so
-        # OPTIONAL_ENV_VARS marks it password=False and the loop above skips it.
-        "VERTEX_CREDENTIALS_PATH",
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        "DEEPSEEK_API_KEY",
-        "MISTRAL_API_KEY",
-        "GROQ_API_KEY",
-        "TOGETHER_API_KEY",
-        "PERPLEXITY_API_KEY",
-        "COHERE_API_KEY",
-        "FIREWORKS_API_KEY",
-        "XAI_API_KEY",
-        "HELICONE_API_KEY",
-        "PARALLEL_API_KEY",
-        "FIRECRAWL_API_KEY",
-        "FIRECRAWL_API_URL",
-        "TELEGRAM_HOME_CHANNEL",
-        "TELEGRAM_HOME_CHANNEL_NAME",
-        "DISCORD_HOME_CHANNEL",
-        "DISCORD_HOME_CHANNEL_NAME",
-        "DISCORD_REQUIRE_MENTION",
-        "DISCORD_FREE_RESPONSE_CHANNELS",
-        "DISCORD_AUTO_THREAD",
-        "SLACK_HOME_CHANNEL",
-        "SLACK_HOME_CHANNEL_NAME",
-        "SLACK_ALLOWED_USERS",
-        "WHATSAPP_ENABLED",
-        "WHATSAPP_MODE",
-        "WHATSAPP_ALLOWED_USERS",
-        "SIGNAL_HTTP_URL",
-        "SIGNAL_ACCOUNT",
-        "SIGNAL_ALLOWED_USERS",
-        "SIGNAL_GROUP_ALLOWED_USERS",
-        "SIGNAL_HOME_CHANNEL",
-        "SIGNAL_HOME_CHANNEL_NAME",
-        "SIGNAL_IGNORE_STORIES",
-        "HASS_TOKEN",
-        "HASS_URL",
-        "EMAIL_ADDRESS",
-        "EMAIL_PASSWORD",
-        "EMAIL_IMAP_HOST",
-        "EMAIL_SMTP_HOST",
-        "EMAIL_HOME_ADDRESS",
-        "EMAIL_HOME_ADDRESS_NAME",
-        "HERMES_DASHBOARD_SESSION_TOKEN",
-        "GATEWAY_ALLOWED_USERS",
-        "GH_TOKEN",
-        "GITHUB_APP_ID",
-        "GITHUB_APP_PRIVATE_KEY_PATH",
-        "GITHUB_APP_INSTALLATION_ID",
-        "MODAL_TOKEN_ID",
-        "MODAL_TOKEN_SECRET",
-        "DAYTONA_API_KEY",
-        "GATEWAY_RELAY_ID",
-        "GATEWAY_RELAY_SECRET",
-        "GATEWAY_RELAY_DELIVERY_KEY",
-    })
+    blocked.update(
+        {
+            "OPENAI_BASE_URL",
+            "OPENAI_API_KEY",
+            "OPENAI_API_BASE",
+            "OPENAI_ORG_ID",
+            "OPENAI_ORGANIZATION",
+            "OPENROUTER_API_KEY",
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "LLM_MODEL",
+            "GOOGLE_API_KEY",
+            # Path to a GCP service-account JSON, not a bare key, so
+            # OPTIONAL_ENV_VARS marks it password=False and the loop above skips it.
+            "VERTEX_CREDENTIALS_PATH",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "DEEPSEEK_API_KEY",
+            "MISTRAL_API_KEY",
+            "GROQ_API_KEY",
+            "TOGETHER_API_KEY",
+            "PERPLEXITY_API_KEY",
+            "COHERE_API_KEY",
+            "FIREWORKS_API_KEY",
+            "XAI_API_KEY",
+            "HELICONE_API_KEY",
+            "PARALLEL_API_KEY",
+            "FIRECRAWL_API_KEY",
+            "FIRECRAWL_API_URL",
+            "TELEGRAM_HOME_CHANNEL",
+            "TELEGRAM_HOME_CHANNEL_NAME",
+            "DISCORD_HOME_CHANNEL",
+            "DISCORD_HOME_CHANNEL_NAME",
+            "DISCORD_REQUIRE_MENTION",
+            "DISCORD_FREE_RESPONSE_CHANNELS",
+            "DISCORD_AUTO_THREAD",
+            "SLACK_HOME_CHANNEL",
+            "SLACK_HOME_CHANNEL_NAME",
+            "SLACK_ALLOWED_USERS",
+            "WHATSAPP_ENABLED",
+            "WHATSAPP_MODE",
+            "WHATSAPP_ALLOWED_USERS",
+            "SIGNAL_HTTP_URL",
+            "SIGNAL_ACCOUNT",
+            "SIGNAL_ALLOWED_USERS",
+            "SIGNAL_GROUP_ALLOWED_USERS",
+            "SIGNAL_HOME_CHANNEL",
+            "SIGNAL_HOME_CHANNEL_NAME",
+            "SIGNAL_IGNORE_STORIES",
+            "HASS_TOKEN",
+            "HASS_URL",
+            "EMAIL_ADDRESS",
+            "EMAIL_PASSWORD",
+            "EMAIL_IMAP_HOST",
+            "EMAIL_SMTP_HOST",
+            "EMAIL_HOME_ADDRESS",
+            "EMAIL_HOME_ADDRESS_NAME",
+            "HERMES_DASHBOARD_SESSION_TOKEN",
+            "GATEWAY_ALLOWED_USERS",
+            "GH_TOKEN",
+            "GITHUB_APP_ID",
+            "GITHUB_APP_PRIVATE_KEY_PATH",
+            "GITHUB_APP_INSTALLATION_ID",
+            "MODAL_TOKEN_ID",
+            "MODAL_TOKEN_SECRET",
+            "DAYTONA_API_KEY",
+            "GATEWAY_RELAY_ID",
+            "GATEWAY_RELAY_SECRET",
+            "GATEWAY_RELAY_DELIVERY_KEY",
+        }
+    )
     # CLAUDE_CODE_OAUTH_TOKEN is deliberately NOT stripped.  It is set and
     # owned by the user's Claude Code install (subscription OAuth), not a
     # Hermes-managed inference credential — Claude subscription auth is not a
@@ -362,7 +368,7 @@ def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = Non
 
     for key, value in (extra_env or {}).items():
         if key.startswith(_HERMES_PROVIDER_ENV_FORCE_PREFIX):
-            real_key = key[len(_HERMES_PROVIDER_ENV_FORCE_PREFIX):]
+            real_key = key[len(_HERMES_PROVIDER_ENV_FORCE_PREFIX) :]
             if _is_hermes_internal_secret(real_key):
                 continue
             sanitized[real_key] = value
@@ -374,6 +380,7 @@ def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = Non
     _inject_context_hermes_home(sanitized)
 
     from hermes_constants import apply_subprocess_home_env
+
     apply_subprocess_home_env(sanitized)
 
     # Same cross-session leak guard as _make_run_env, for the background/PTY
@@ -396,39 +403,41 @@ def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = Non
 # GitHub auth, remote-compute tokens, dashboard session secret).  The set is a
 # narrow subset of _HERMES_PROVIDER_ENV_BLOCKLIST; provider keys are handled by
 # the conditional Tier-2 strip in hermes_subprocess_env().
-_ALWAYS_STRIP_KEYS: frozenset[str] = frozenset({
-    # GitHub auth
-    "GH_TOKEN",
-    "GITHUB_TOKEN",
-    "GITHUB_APP_ID",
-    "GITHUB_APP_PRIVATE_KEY_PATH",
-    "GITHUB_APP_INSTALLATION_ID",
-    # Gateway / messaging bot tokens and access control
-    "TELEGRAM_BOT_TOKEN",
-    "DISCORD_BOT_TOKEN",
-    "SLACK_BOT_TOKEN",
-    "SLACK_APP_TOKEN",
-    "SLACK_SIGNING_SECRET",
-    "GATEWAY_ALLOWED_USERS",
-    "GATEWAY_ALLOW_ALL_USERS",
-    # Gateway relay auth — the ID/secret/delivery-key triplet the gateway
-    # provisions and persists to the 0600 .env. Stripped unconditionally on
-    # EVERY spawn surface (terminal + model-driving CLIs) so it can't drift
-    # between paths: _SECRET / _DELIVERY_KEY are also matched by
-    # _is_hermes_internal_secret, but _ID has no secret suffix, so it must be
-    # enumerated here to stay stripped on the inherit_credentials=True path
-    # (codex / copilot), which skips the Tier-2 blocklist.
-    "GATEWAY_RELAY_ID",
-    "GATEWAY_RELAY_SECRET",
-    "GATEWAY_RELAY_DELIVERY_KEY",
-    "HASS_TOKEN",
-    "EMAIL_PASSWORD",
-    "HERMES_DASHBOARD_SESSION_TOKEN",
-    # Remote-compute / infrastructure secrets
-    "MODAL_TOKEN_ID",
-    "MODAL_TOKEN_SECRET",
-    "DAYTONA_API_KEY",
-})
+_ALWAYS_STRIP_KEYS: frozenset[str] = frozenset(
+    {
+        # GitHub auth
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_PRIVATE_KEY_PATH",
+        "GITHUB_APP_INSTALLATION_ID",
+        # Gateway / messaging bot tokens and access control
+        "TELEGRAM_BOT_TOKEN",
+        "DISCORD_BOT_TOKEN",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "SLACK_SIGNING_SECRET",
+        "GATEWAY_ALLOWED_USERS",
+        "GATEWAY_ALLOW_ALL_USERS",
+        # Gateway relay auth — the ID/secret/delivery-key triplet the gateway
+        # provisions and persists to the 0600 .env. Stripped unconditionally on
+        # EVERY spawn surface (terminal + model-driving CLIs) so it can't drift
+        # between paths: _SECRET / _DELIVERY_KEY are also matched by
+        # _is_hermes_internal_secret, but _ID has no secret suffix, so it must be
+        # enumerated here to stay stripped on the inherit_credentials=True path
+        # (codex / copilot), which skips the Tier-2 blocklist.
+        "GATEWAY_RELAY_ID",
+        "GATEWAY_RELAY_SECRET",
+        "GATEWAY_RELAY_DELIVERY_KEY",
+        "HASS_TOKEN",
+        "EMAIL_PASSWORD",
+        "HERMES_DASHBOARD_SESSION_TOKEN",
+        # Remote-compute / infrastructure secrets
+        "MODAL_TOKEN_ID",
+        "MODAL_TOKEN_SECRET",
+        "DAYTONA_API_KEY",
+    }
+)
 
 
 def hermes_subprocess_env(*, inherit_credentials: bool = False) -> dict[str, str]:
@@ -489,6 +498,7 @@ def hermes_subprocess_env(*, inherit_credentials: bool = False) -> dict[str, str
 
     _inject_context_hermes_home(env)
     from hermes_constants import apply_subprocess_home_env
+
     apply_subprocess_home_env(env)
 
     # Active-venv markers must not clobber another project's environment.
@@ -538,8 +548,8 @@ def _find_bash() -> str:
     _hermes_portable_git = os.path.join(_local_appdata, "hermes", "git") if _local_appdata else ""
     if _hermes_portable_git:
         for candidate in (
-            os.path.join(_hermes_portable_git, "bin", "bash.exe"),        # PortableGit (primary)
-            os.path.join(_hermes_portable_git, "usr", "bin", "bash.exe"), # MinGit fallback
+            os.path.join(_hermes_portable_git, "bin", "bash.exe"),  # PortableGit (primary)
+            os.path.join(_hermes_portable_git, "usr", "bin", "bash.exe"),  # MinGit fallback
         ):
             if os.path.isfile(candidate):
                 return candidate
@@ -550,7 +560,9 @@ def _find_bash() -> str:
     # will fail silently).  Explicit Git-for-Windows paths avoid that.
     for candidate in (
         os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git", "bin", "bash.exe"),
-        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Git", "bin", "bash.exe"),
+        os.path.join(
+            os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Git", "bin", "bash.exe"
+        ),
         os.path.join(_local_appdata, "Programs", "Git", "bin", "bash.exe"),
     ):
         if candidate and os.path.isfile(candidate):
@@ -802,7 +814,7 @@ def _make_run_env(env: dict) -> dict:
     run_env = {}
     for k, v in merged.items():
         if k.startswith(_HERMES_PROVIDER_ENV_FORCE_PREFIX):
-            real_key = k[len(_HERMES_PROVIDER_ENV_FORCE_PREFIX):]
+            real_key = k[len(_HERMES_PROVIDER_ENV_FORCE_PREFIX) :]
             if _is_hermes_internal_secret(real_key):
                 continue
             run_env[real_key] = v
@@ -821,6 +833,7 @@ def _make_run_env(env: dict) -> dict:
     _inject_context_hermes_home(run_env)
 
     from hermes_constants import apply_subprocess_home_env
+
     apply_subprocess_home_env(run_env)
 
     # Bridge ContextVar-based session vars into the subprocess env (with the
@@ -960,6 +973,7 @@ class LocalEnvironment(BaseEnvironment):
             # the path so we can guarantee no spaces.
             try:
                 from hermes_constants import get_hermes_home
+
                 cache_dir = get_hermes_home() / "cache" / "terminal"
             except Exception:
                 cache_dir = Path(tempfile.gettempdir()) / "hermes_terminal"
@@ -986,9 +1000,14 @@ class LocalEnvironment(BaseEnvironment):
         """Use native paths for Python, but Git Bash-friendly paths for cd."""
         return BaseEnvironment._quote_cwd_for_cd(_windows_to_msys_path(cwd))
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False,
-                  timeout: int = 120,
-                  stdin_data: str | None = None) -> subprocess.Popen:
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ) -> subprocess.Popen:
         bash = _find_bash()
         # For login-shell invocations (used by init_session to build the
         # environment snapshot), prepend sources for the user's bashrc /
@@ -1109,7 +1128,9 @@ class LocalEnvironment(BaseEnvironment):
                         raise
 
                 try:
-                    os.killpg(pgid, signal.SIGTERM)  # windows-footgun: ok — POSIX process-group SIGTERM (guarded by _IS_WINDOWS above)
+                    os.killpg(
+                        pgid, signal.SIGTERM
+                    )  # windows-footgun: ok — POSIX process-group SIGTERM (guarded by _IS_WINDOWS above)
                 except ProcessLookupError:
                     return
 
@@ -1121,7 +1142,9 @@ class LocalEnvironment(BaseEnvironment):
 
                 try:
                     # POSIX-only: _IS_WINDOWS is handled by the outer branch.
-                    os.killpg(pgid, signal.SIGKILL)  # windows-footgun: ok — POSIX process-group SIGKILL
+                    os.killpg(
+                        pgid, signal.SIGKILL
+                    )  # windows-footgun: ok — POSIX process-group SIGKILL
                 except ProcessLookupError:
                     return
                 _wait_for_group_exit(pgid, 2.0)
@@ -1198,6 +1221,7 @@ class LocalEnvironment(BaseEnvironment):
         # a failed/interrupted mv could have left behind (#38249).
         try:
             import glob
+
             for tmp in glob.glob(f"{self._snapshot_path}.tmp.*"):
                 try:
                     os.unlink(tmp)

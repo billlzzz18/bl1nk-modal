@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Callable
 
 from hermes_constants import get_hermes_home
-from tools.environments.base import _file_mtime_key
+from .base import _file_mtime_key
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,9 @@ _FORCE_SYNC_ENV = "HERMES_FORCE_FILE_SYNC"
 
 # Transport callbacks provided by each backend
 UploadFn = Callable[[str, str], None]  # (host_path, remote_path) -> raises on failure
-BulkUploadFn = Callable[[list[tuple[str, str]]], None]  # [(host_path, remote_path), ...] -> raises on failure
+BulkUploadFn = Callable[
+    [list[tuple[str, str]]], None
+]  # [(host_path, remote_path), ...] -> raises on failure
 BulkDownloadFn = Callable[[Path], None]  # (dest_tar_path) -> writes tar archive, raises on failure
 DeleteFn = Callable[[list[str]], None]  # (remote_paths) -> raises on failure
 GetFilesFn = Callable[[], list[tuple[str, str]]]  # () -> [(host_path, remote_path), ...]
@@ -65,9 +67,7 @@ def iter_sync_files(container_base: str = "/root/.hermes") -> list[tuple[str, st
 
     files: list[tuple[str, str]] = []
     for entry in get_credential_file_mounts():
-        remote = entry["container_path"].replace(
-            "/root/.hermes", container_base, 1
-        )
+        remote = entry["container_path"].replace("/root/.hermes", container_base, 1)
         files.append((entry["host_path"], remote))
     for entry in iter_skills_files(container_base=container_base):
         files.append((entry["host_path"], entry["container_path"]))
@@ -273,7 +273,9 @@ class FileSyncManager:
                     delay = _SYNC_BACK_BACKOFF[attempt]
                     logger.warning(
                         "sync_back: attempt %d failed (%s), retrying in %ds",
-                        attempt + 1, exc, delay,
+                        attempt + 1,
+                        exc,
+                        delay,
                     )
                     _sleep(delay)
 
@@ -344,7 +346,8 @@ class FileSyncManager:
             if tar_size > _SYNC_BACK_MAX_BYTES:
                 logger.warning(
                     "sync_back: remote tar is %d bytes (cap %d) — skipping extraction",
-                    tar_size, _SYNC_BACK_MAX_BYTES,
+                    tar_size,
+                    _SYNC_BACK_MAX_BYTES,
                 )
                 return
 
@@ -353,9 +356,7 @@ class FileSyncManager:
                     tar.extractall(staging, filter="data")
 
                 applied = 0
-                upload_only_host_paths = (
-                    self._upload_only_host_paths | _credential_host_paths()
-                )
+                upload_only_host_paths = self._upload_only_host_paths | _credential_host_paths()
                 for dirpath, _dirnames, filenames in os.walk(staging):
                     for fname in filenames:
                         staged_file = os.path.join(dirpath, fname)
@@ -413,8 +414,9 @@ class FileSyncManager:
                 else:
                     logger.debug("sync_back: no remote changes detected")
 
-    def _resolve_host_path(self, remote_path: str,
-                           file_mapping: list[tuple[str, str]] | None = None) -> str | None:
+    def _resolve_host_path(
+        self, remote_path: str, file_mapping: list[tuple[str, str]] | None = None
+    ) -> str | None:
         """Find the host path for a known remote path from the file mapping."""
         mapping = file_mapping if file_mapping is not None else []
         for host, remote in mapping:
@@ -422,10 +424,13 @@ class FileSyncManager:
                 return host
         return None
 
-    def _infer_host_path(self, remote_path: str,
-                         file_mapping: list[tuple[str, str]] | None = None,
-                         *,
-                         upload_only_host_paths: set[str] | None = None) -> str | None:
+    def _infer_host_path(
+        self,
+        remote_path: str,
+        file_mapping: list[tuple[str, str]] | None = None,
+        *,
+        upload_only_host_paths: set[str] | None = None,
+    ) -> str | None:
         """Infer a host path for a new remote file by matching path prefixes.
 
         Uses the existing file mapping to find a remote->host directory
@@ -442,7 +447,7 @@ class FileSyncManager:
             remote_dir = str(Path(remote).parent)
             if remote_path.startswith(remote_dir + "/"):
                 host_dir = str(Path(host).parent)
-                suffix = remote_path[len(remote_dir):]
+                suffix = remote_path[len(remote_dir) :]
                 return host_dir + suffix
         return None
 

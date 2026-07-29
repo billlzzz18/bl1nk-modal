@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from hermes_constants import get_hermes_home
-from tools.environments.base import (
+from .base import (
     BaseEnvironment,
     _load_json_store,
     _popen_bash,
@@ -45,13 +45,14 @@ def _ensure_singularity_available() -> str:
     exe = _find_singularity_executable()
     try:
         result = subprocess.run(
-            [exe, "version"], capture_output=True, text=True, timeout=10,
+            [exe, "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
             stdin=subprocess.DEVNULL,
         )
     except FileNotFoundError:
-        raise RuntimeError(
-            f"Singularity backend selected but '{exe}' could not be executed."
-        )
+        raise RuntimeError(f"Singularity backend selected but '{exe}' could not be executed.")
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"'{exe} version' timed out.")
 
@@ -76,7 +77,8 @@ def _get_scratch_dir() -> Path:
         scratch_path.mkdir(parents=True, exist_ok=True)
         return scratch_path
 
-    from tools.environments.base import get_sandbox_dir
+    from .base import get_sandbox_dir
+
     sandbox = get_sandbox_dir() / "singularity"
 
     scratch = Path("/scratch")
@@ -106,12 +108,12 @@ _sif_build_lock = threading.Lock()
 
 
 def _get_or_build_sif(image: str, executable: str = "apptainer") -> str:
-    if image.endswith('.sif') and Path(image).exists():
+    if image.endswith(".sif") and Path(image).exists():
         return image
-    if not image.startswith('docker://'):
+    if not image.startswith("docker://"):
         return image
 
-    image_name = image.replace('docker://', '').replace('/', '-').replace(':', '-')
+    image_name = image.replace("docker://", "").replace("/", "-").replace(":", "-")
     cache_dir = _get_apptainer_cache_dir()
     sif_path = cache_dir / f"{image_name}.sif"
 
@@ -136,7 +138,10 @@ def _get_or_build_sif(image: str, executable: str = "apptainer") -> str:
         try:
             result = subprocess.run(
                 [executable, "build", str(sif_path), image],
-                capture_output=True, text=True, timeout=600, env=env,
+                capture_output=True,
+                text=True,
+                timeout=600,
+                env=env,
                 stdin=subprocess.DEVNULL,
             )
             if result.returncode != 0:
@@ -204,11 +209,19 @@ class SingularityEnvironment(BaseEnvironment):
             cmd.append("--writable-tmpfs")
 
         try:
-            from tools.credential_files import get_credential_file_mounts, get_skills_directory_mount
+            from tools.credential_files import (
+                get_credential_file_mounts,
+                get_skills_directory_mount,
+            )
+
             for mount_entry in get_credential_file_mounts():
-                cmd.extend(["--bind", f"{mount_entry['host_path']}:{mount_entry['container_path']}:ro"])
+                cmd.extend(
+                    ["--bind", f"{mount_entry['host_path']}:{mount_entry['container_path']}:ro"]
+                )
             for skills_mount in get_skills_directory_mount():
-                cmd.extend(["--bind", f"{skills_mount['host_path']}:{skills_mount['container_path']}:ro"])
+                cmd.extend(
+                    ["--bind", f"{skills_mount['host_path']}:{skills_mount['container_path']}:ro"]
+                )
         except Exception as e:
             logger.debug("Singularity: could not load credential/skills mounts: %s", e)
 
@@ -220,24 +233,33 @@ class SingularityEnvironment(BaseEnvironment):
         cmd.extend([str(self.image), self.instance_id])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL
+            )
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to start instance: {result.stderr}")
             self._instance_started = True
-            logger.info("Singularity instance %s started (persistent=%s)",
-                        self.instance_id, self._persistent)
+            logger.info(
+                "Singularity instance %s started (persistent=%s)",
+                self.instance_id,
+                self._persistent,
+            )
         except subprocess.TimeoutExpired:
             raise RuntimeError("Instance start timed out")
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False,
-                  timeout: int = 120,
-                  stdin_data: str | None = None) -> subprocess.Popen:
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ) -> subprocess.Popen:
         """Spawn a bash process inside the Singularity instance."""
         if not self._instance_started:
             raise RuntimeError("Singularity instance not started")
 
-        cmd = [self.executable, "exec",
-               f"instance://{self.instance_id}"]
+        cmd = [self.executable, "exec", f"instance://{self.instance_id}"]
         if login:
             cmd.extend(["bash", "-l", "-c", cmd_string])
         else:
@@ -251,7 +273,9 @@ class SingularityEnvironment(BaseEnvironment):
             try:
                 subprocess.run(
                     [self.executable, "instance", "stop", self.instance_id],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
                     stdin=subprocess.DEVNULL,
                 )
                 logger.info("Singularity instance %s stopped", self.instance_id)

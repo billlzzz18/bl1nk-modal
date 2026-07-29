@@ -12,11 +12,11 @@ import shlex
 import threading
 from pathlib import Path
 
-from tools.environments.base import (
+from .base import (
     BaseEnvironment,
     _ThreadedProcessHandle,
 )
-from tools.environments.file_sync import (
+from .file_sync import (
     FileSyncManager,
     iter_sync_files,
     quoted_mkdir_command,
@@ -53,6 +53,7 @@ class DaytonaEnvironment(BaseEnvironment):
 
         try:
             from tools.lazy_deps import ensure as _lazy_ensure
+
             _lazy_ensure("terminal.daytona", prompt=False)
         except ImportError:
             pass
@@ -77,8 +78,8 @@ class DaytonaEnvironment(BaseEnvironment):
         disk_gib = max(1, math.ceil(disk / 1024))
         if disk_gib > 10:
             logger.warning(
-                "Daytona: requested disk (%dGB) exceeds platform limit (10GB). "
-                "Capping to 10GB.", disk_gib,
+                "Daytona: requested disk (%dGB) exceeds platform limit (10GB). Capping to 10GB.",
+                disk_gib,
             )
             disk_gib = 10
         resources = Resources(cpu=cpu, memory=memory_gib, disk=disk_gib)
@@ -90,13 +91,11 @@ class DaytonaEnvironment(BaseEnvironment):
             try:
                 self._sandbox = self._daytona.get(sandbox_name)
                 self._sandbox.start()
-                logger.info("Daytona: resumed sandbox %s for task %s",
-                            self._sandbox.id, task_id)
+                logger.info("Daytona: resumed sandbox %s for task %s", self._sandbox.id, task_id)
             except DaytonaError:
                 self._sandbox = None
             except Exception as e:
-                logger.warning("Daytona: failed to resume sandbox for task %s: %s",
-                               task_id, e)
+                logger.warning("Daytona: failed to resume sandbox for task %s: %s", task_id, e)
                 self._sandbox = None
 
             if self._sandbox is None:
@@ -109,11 +108,13 @@ class DaytonaEnvironment(BaseEnvironment):
                     if legacy is not None:
                         self._sandbox = legacy
                         self._sandbox.start()
-                        logger.info("Daytona: resumed legacy sandbox %s for task %s",
-                                    self._sandbox.id, task_id)
+                        logger.info(
+                            "Daytona: resumed legacy sandbox %s for task %s",
+                            self._sandbox.id,
+                            task_id,
+                        )
                 except Exception as e:
-                    logger.debug("Daytona: no legacy sandbox found for task %s: %s",
-                                 task_id, e)
+                    logger.debug("Daytona: no legacy sandbox found for task %s: %s", task_id, e)
                     self._sandbox = None
 
         if self._sandbox is None:
@@ -126,8 +127,7 @@ class DaytonaEnvironment(BaseEnvironment):
                     resources=resources,
                 )
             )
-            logger.info("Daytona: created sandbox %s for task %s",
-                        self._sandbox.id, task_id)
+            logger.info("Daytona: created sandbox %s for task %s", self._sandbox.id, task_id)
 
         # Detect remote home dir
         self._remote_home = "/root"
@@ -185,9 +185,7 @@ class DaytonaEnvironment(BaseEnvironment):
         # PID-suffixed remote temp path avoids collisions if sync_back fires
         # concurrently for the same sandbox (e.g. retry after partial failure).
         remote_tar = f"/tmp/.hermes_sync.{os.getpid()}.tar"
-        self._sandbox.process.exec(
-            f"tar cf {shlex.quote(remote_tar)} -C / {shlex.quote(rel_base)}"
-        )
+        self._sandbox.process.exec(f"tar cf {shlex.quote(remote_tar)} -C / {shlex.quote(rel_base)}")
         self._sandbox.fs.download_file(remote_tar, str(dest))
         # Clean up remote temp file
         try:
@@ -216,9 +214,14 @@ class DaytonaEnvironment(BaseEnvironment):
             self._ensure_sandbox_ready()
         self._sync_manager.sync()
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False,
-                  timeout: int = 120,
-                  stdin_data: str | None = None):
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ):
         """Return a _ThreadedProcessHandle wrapping a blocking Daytona SDK call."""
         sandbox = self._sandbox
         lock = self._lock
@@ -260,8 +263,9 @@ class DaytonaEnvironment(BaseEnvironment):
             try:
                 if self._persistent:
                     self._sandbox.stop()
-                    logger.info("Daytona: stopped sandbox %s (filesystem preserved)",
-                                self._sandbox.id)
+                    logger.info(
+                        "Daytona: stopped sandbox %s (filesystem preserved)", self._sandbox.id
+                    )
                 else:
                     self._daytona.delete(self._sandbox)
                     logger.info("Daytona: deleted sandbox %s", self._sandbox.id)

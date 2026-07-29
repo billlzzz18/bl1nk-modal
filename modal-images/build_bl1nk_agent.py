@@ -12,7 +12,6 @@ app = None
 # modal_app.py which imports this list.
 SHARED_INSTALL_COMMANDS = [
     "curl https://sh.rustup.rs -sSf | sh -s -- -y",
-    "ln -sf /root/.cargo/bin/* /usr/local/bin/",
     "rustup default stable",
     "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
     "apt-get install -y nodejs",
@@ -44,9 +43,13 @@ SHARED_INSTALL_COMMANDS = [
     # Symlink tools installed to /root/.local/bin into /usr/local/bin (so they survive HOME=/home/workspace)
     "ln -sf /root/.local/bin/qwen /usr/local/bin/qwen",
     "ln -sf /root/.local/bin/claude /usr/local/bin/claude",
-    "ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo",
-    "ln -sf /root/.cargo/bin/rustup /usr/local/bin/rustup",
-    "ln -sf /root/.cargo/bin/rustc /usr/local/bin/rustc",
+    # Move Rust toolchain to workspace-owned dir so workspace user can write (cargo install, build, etc.)
+    "mv /root/.rustup /home/workspace/.rustup",
+    "mv /root/.cargo /home/workspace/.cargo",
+    "ln -sf /home/workspace/.cargo/bin/cargo /usr/local/bin/cargo",
+    "ln -sf /home/workspace/.cargo/bin/rustup /usr/local/bin/rustup",
+    "ln -sf /home/workspace/.cargo/bin/rustc /usr/local/bin/rustc",
+    "chown -R workspace:workspace /home/workspace/.rustup /home/workspace/.cargo",
 ]
 
 
@@ -74,8 +77,8 @@ def build_image() -> modal.Image:
         .env({
             "HOME": "/home/workspace",
             "PATH": "/home/workspace/.local/bin:/usr/local/bin:/usr/bin:/bin",
-            "RUSTUP_HOME": "/root/.rustup",
-            "CARGO_HOME": "/root/.cargo",
+            "RUSTUP_HOME": "/home/workspace/.rustup",
+            "CARGO_HOME": "/home/workspace/.cargo",
         })
     )
 

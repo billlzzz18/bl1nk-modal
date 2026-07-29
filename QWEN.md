@@ -60,13 +60,14 @@ modal-apps/bl1nk-app/
 
 The base image `bl1nk-agent:latest` (built by `modal-images/build_bl1nk_agent.py`) is a `debian_slim` Python 3.12 image with:
 
-- Rust toolchain (rustup, `~/.cargo/bin` on PATH)
+- Rust toolchain (rustup, installed to `/home/workspace/.cargo/bin` — symlinked to `/usr/local/bin/`)
 - Node.js 22 + npm (via NodeSource)
 - Bun
 - GitHub CLI (`gh`)
-- Claude CLI (`/root/.local/bin/claude`)
+- Claude CLI (installed to `/root/.local/bin/claude` — symlinked to `/usr/local/bin/claude`)
 - ripgrep 14.1.1 (`/usr/local/bin/rg`)
 - A non-root `workspace` user with `$HOME=/home/workspace`
+- `RUSTUP_HOME=/home/workspace/.rustup`, `CARGO_HOME=/home/workspace/.cargo` (workspace-owned, so `cargo install` etc. work without root)
 
 The in-app `_make_sandbox_image()` defines an equivalent image inline for sandbox creation. The two image definitions should stay in sync; the in-process one is the source of truth for fresh sandboxes, while the published one is consumed by the app's own functions.
 
