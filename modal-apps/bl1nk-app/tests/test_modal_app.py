@@ -1,26 +1,20 @@
-from unittest.mock import patch
-
-import pytest
-
-import modal_agy_app as modal_app
+import modal_app
 
 
-def test_run_orchestrator_runs_script_when_present():
-    with patch.object(modal_app, "subprocess") as mock_subprocess, \
-         patch.object(modal_app.Path, "exists", return_value=True):
-        modal_app.run_orchestrator.local()
-
-    mock_subprocess.run.assert_called_once_with(
-        ["bash", "/mnt/persistent_agents/orchestrator.sh"],
-        timeout=1800,
-        check=True,
-    )
+def test_sandbox_manager_singleton():
+    assert modal_app.get_sandbox_manager() is modal_app.get_sandbox_manager()
 
 
-def test_run_orchestrator_raises_when_script_missing():
-    with patch.object(modal_app, "subprocess") as mock_subprocess, \
-         patch.object(modal_app.Path, "exists", return_value=False):
-        with pytest.raises(FileNotFoundError):
-            modal_app.run_orchestrator.local()
+def test_sandbox_manager_defaults():
+    mgr = modal_app.SandboxManager()
+    assert mgr.DEFAULT_TIMEOUT == 3600
+    assert mgr.DEFAULT_MAX_LIFETIME == 7200
+    assert mgr.CLEANUP_INTERVAL == 300
 
-    mock_subprocess.run.assert_not_called()
+
+def test_list_sandboxes_empty():
+    assert modal_app.SandboxManager().list_sandboxes() == []
+
+
+def test_destroy_nonexistent():
+    assert modal_app.SandboxManager().destroy_sandbox("nonexistent") is False
