@@ -252,6 +252,7 @@ def _make_sandbox_image() -> modal.Image:
         .run_commands(
             "curl https://sh.rustup.rs -sSf | sh -s -- -y",
             "ln -sf /root/.cargo/bin/* /usr/local/bin/",
+            "rustup default stable",
             "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
             "apt-get install -y nodejs",
             "curl -fsSL https://bun.sh/install | bash",
@@ -277,10 +278,24 @@ def _make_sandbox_image() -> modal.Image:
             "curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar -xz",
             "mv ripgrep-14.1.1-x86_64-unknown-linux-musl/rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg",
             "rg --version || true",
+            # Install Hermes Agent
+            "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash",
+            # Install Qwen Code CLI
+            "curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash",
+            # Cleanup: remove .git, tests, __pycache__, node_modules from hermes repo to save ~1.5G
+            "rm -rf /usr/local/lib/hermes-agent/.git /usr/local/lib/hermes-agent/tests /usr/local/lib/hermes-agent/__pycache__ /usr/local/lib/hermes-agent/node_modules",
+            "rm -rf /tmp/* /var/tmp/*",
+            # Symlink tools installed to /root/.local/bin into /usr/local/bin (so they survive HOME=/home/workspace)
+            "ln -sf /root/.local/bin/qwen /usr/local/bin/qwen",
+            "ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo",
+            "ln -sf /root/.cargo/bin/rustup /usr/local/bin/rustup",
+            "ln -sf /root/.cargo/bin/rustc /usr/local/bin/rustc",
         )
         .env({
             "HOME": "/home/workspace",
             "PATH": "/home/workspace/.local/bin:/usr/local/bin:/usr/bin:/bin",
+            "RUSTUP_HOME": "/root/.rustup",
+            "CARGO_HOME": "/root/.cargo",
         })
     )
 
