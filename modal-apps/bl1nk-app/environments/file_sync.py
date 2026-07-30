@@ -59,11 +59,16 @@ def iter_sync_files(container_base: str = "/root/.hermes") -> list[tuple[str, st
     """
     # Late import: credential_files imports agent modules that create
     # circular dependencies if loaded at file_sync module level.
-    from tools.credential_files import (
-        get_credential_file_mounts,
-        iter_cache_files,
-        iter_skills_files,
-    )
+    try:
+        from tools.credential_files import (
+            get_credential_file_mounts,
+            iter_cache_files,
+            iter_skills_files,
+        )
+    except ImportError:
+        get_credential_file_mounts = lambda: []  # noqa: E731
+        iter_cache_files = lambda **kw: []  # noqa: E731
+        iter_skills_files = lambda **kw: []  # noqa: E731
 
     files: list[tuple[str, str]] = []
     for entry in get_credential_file_mounts():

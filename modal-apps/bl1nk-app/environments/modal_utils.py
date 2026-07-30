@@ -21,7 +21,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from .base import BaseEnvironment
-from tools.interrupt import is_interrupted
+
+try:
+    from tools.interrupt import is_interrupted
+except ImportError:
+    is_interrupted = lambda: False  # noqa: E731
 
 
 @dataclass(frozen=True)

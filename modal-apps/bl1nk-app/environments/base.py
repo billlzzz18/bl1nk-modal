@@ -22,7 +22,11 @@ from typing import IO, Callable, Protocol
 
 from hermes_constants import get_hermes_home
 from hermes_cli._subprocess_compat import windows_hide_flags
-from tools.interrupt import is_interrupted
+
+try:
+    from tools.interrupt import is_interrupted
+except ImportError:
+    is_interrupted = lambda: False  # noqa: E731
 
 logger = logging.getLogger(__name__)
 
@@ -916,7 +920,10 @@ class BaseEnvironment(ABC):
         # Some callers (spawn_via_env) already produce shell-safe wrappers and
         # pass rewrite_compound_background=False.
         if rewrite_compound_background:
-            from tools.terminal_tool import _rewrite_compound_background
+            try:
+                from tools.terminal_tool import _rewrite_compound_background
+            except ImportError:
+                _rewrite_compound_background = lambda cmd: cmd  # noqa: E731
             exec_command = _rewrite_compound_background(exec_command)
         effective_timeout = timeout or self.timeout
         effective_cwd = cwd or self.cwd
@@ -963,6 +970,9 @@ class BaseEnvironment(ABC):
 
     def _prepare_command(self, command: str) -> tuple[str, str | None]:
         """Transform sudo commands if SUDO_PASSWORD is available."""
-        from tools.terminal_tool import _transform_sudo_command
+        try:
+            from tools.terminal_tool import _transform_sudo_command
+        except ImportError:
+            _transform_sudo_command = lambda cmd: (cmd, None)  # noqa: E731
 
         return _transform_sudo_command(command)
