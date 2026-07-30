@@ -16,7 +16,10 @@ from .modal_utils import (
     ModalExecStart,
     PreparedModalExec,
 )
-from tools.managed_tool_gateway import resolve_managed_tool_gateway
+try:
+    from tools.managed_tool_gateway import resolve_managed_tool_gateway
+except ImportError:
+    resolve_managed_tool_gateway = lambda mode: None  # noqa: E731
 
 logger = logging.getLogger(__name__)
 
