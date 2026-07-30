@@ -264,7 +264,7 @@ These files still reference the **pre-unification** four-app layout. When you ha
 
 - `modal-apps/bl1nk-app/TODO.md`: **No auth middleware** on API endpoints (sandbox create/exec are publicly accessible); `scripts/publish.sh` runs `pytest` but `tests/test_upload_download.py` and `tests/test_image.py` are still pending.
 - `modal-apps/bl1nk-app/engine/TODO.md`: `exclusive_groups` should be a constant; regex patterns should be configurable; no benchmarks yet.
-- `modal-apps/bl1nk-search/TODO.md` (if exists) or `modal-images/TODO.md`: `search_service.py` has global mutable `_index`/`_ids` that are not thread-safe (everything else is resolved).
+- `modal-apps/bl1nk-search/TODO.md` (if exists) or `modal-images/TODO.md`: ~~`search_service.py` has global mutable `_index`/`_ids` that are not thread-safe~~ — **RESOLVED**: all shared-state ops guarded by `_index_lock` (threading.Lock). Thread safety complete.
 
 ---
 
