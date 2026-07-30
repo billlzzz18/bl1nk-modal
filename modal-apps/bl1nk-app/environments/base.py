@@ -233,13 +233,26 @@ class _ThreadedProcessHandle:
                 output, exit_code = exec_fn()
                 self._returncode = exit_code
                 # Write output into the pipe so drain thread picks it up.
+                encoded = output.encode("utf-8", errors="replace")
                 try:
-                    os.write(self._write_fd, output.encode("utf-8", errors="replace"))
+                    mv = memoryview(encoded)
+                    while mv:
+                        n = os.write(self._write_fd, mv)
+                        mv = mv[n:]
                 except OSError:
                     pass
             except Exception as exc:
                 self._error = exc
                 self._returncode = 1
+                # Write error info to pipe so caller sees it
+                try:
+                    err_msg = str(exc).encode("utf-8", errors="replace")
+                    mv = memoryview(err_msg)
+                    while mv:
+                        n = os.write(self._write_fd, mv)
+                        mv = mv[n:]
+                except OSError:
+                    pass
             finally:
                 try:
                     os.close(self._write_fd)

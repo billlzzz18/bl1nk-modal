@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import requests
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -125,14 +126,20 @@ class ManagedModalEnvironment(BaseModalExecutionEnvironment):
         return ModalExecStart(handle=_ManagedModalExecHandle(exec_id=exec_id))
 
     def _poll_modal_exec(self, handle: _ManagedModalExecHandle) -> dict | None:
-        try:
-            status_response = self._request(
-                "GET",
-                f"/v1/sandboxes/{self._sandbox_id}/execs/{handle.exec_id}",
-                timeout=(self._CONNECT_TIMEOUT_SECONDS, self._POLL_READ_TIMEOUT_SECONDS),
-            )
-        except Exception as exc:
-            return self._error_result(f"Managed Modal exec poll failed: {exc}")
+        last_exc = None
+        for _attempt in range(3):
+            try:
+                status_response = self._request(
+                    "GET",
+                    f"/v1/sandboxes/{self._sandbox_id}/execs/{handle.exec_id}",
+                    timeout=(self._CONNECT_TIMEOUT_SECONDS, self._POLL_READ_TIMEOUT_SECONDS),
+                )
+                break
+            except Exception as exc:
+                last_exc = exc
+                time.sleep(1)
+        else:
+            return self._error_result(f"Managed Modal exec poll failed after retries: {last_exc}")
 
         if status_response.status_code == 404:
             return self._error_result("Managed Modal exec not found")

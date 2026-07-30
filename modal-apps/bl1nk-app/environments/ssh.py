@@ -91,7 +91,11 @@ class SSHEnvironment(BaseEnvironment):
         cmd.extend(["-o", "ControlMaster=auto"])
         cmd.extend(["-o", "ControlPersist=300"])
         cmd.extend(["-o", "BatchMode=yes"])
-        cmd.extend(["-o", "StrictHostKeyChecking=accept-new"])
+        # accept-new: accept host key on first connection but reject changed keys.
+        # Risk: MITM on first connect. Acceptable for ephemeral Modal sandboxes
+        # which get new host keys every session. For persistent hosts, set
+        # StrictHostKeyChecking=yes in SSH config and pre-populate known_hosts.
+        cmd.extend(["-o", "StrictHostKeyChecking=accept-new", "-o", "UpdateHostKeys=yes"])
         cmd.extend(["-o", "ConnectTimeout=10"])
         if self.port != 22:
             cmd.extend(["-p", str(self.port)])

@@ -180,8 +180,13 @@ class FileSyncManager:
         # --- Uploads: new or changed files ---
         to_upload: list[tuple[str, str]] = []
         new_files = dict(self._synced_files)
+        cred_paths = _credential_host_paths()
         for host_path, remote_path in current_files:
-            file_key = _file_mtime_key(host_path)
+            # Credential files use content hash (mtime+size can miss in-place edits)
+            if host_path in cred_paths:
+                file_key = _sha256_file(host_path) if os.path.exists(host_path) else None
+            else:
+                file_key = _file_mtime_key(host_path)
             if file_key is None:
                 continue
             if self._synced_files.get(remote_path) == file_key:

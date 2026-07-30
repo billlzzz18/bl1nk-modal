@@ -62,6 +62,9 @@ def _ensure_singularity_available() -> str:
     return exe
 
 
+_snapshot_lock = threading.Lock()
+
+
 def _load_snapshots() -> dict:
     return _load_json_store(_SNAPSHOT_STORE)
 
@@ -189,6 +192,7 @@ class SingularityEnvironment(BaseEnvironment):
         self._overlay_dir: Optional[Path] = None
         self._cpu = cpu
         self._memory = memory
+        self._disk = disk
 
         if self._persistent:
             overlay_base = _get_scratch_dir() / "hermes-overlays"
@@ -229,6 +233,9 @@ class SingularityEnvironment(BaseEnvironment):
             cmd.extend(["--memory", f"{self._memory}M"])
         if self._cpu > 0:
             cmd.extend(["--cpus", str(self._cpu)])
+        if self._disk > 0:
+            # Singularity CE 3.9+ supports --writable-tmpfs-size
+            cmd.extend(["--writable-tmpfs-size", f"{self._disk}M"])
 
         cmd.extend([str(self.image), self.instance_id])
 
@@ -284,6 +291,7 @@ class SingularityEnvironment(BaseEnvironment):
             self._instance_started = False
 
         if self._persistent and self._overlay_dir:
-            snapshots = _load_snapshots()
-            snapshots[self._task_id] = str(self._overlay_dir)
-            _save_snapshots(snapshots)
+            with _snapshot_lock:
+                snapshots = _load_snapshots()
+                snapshots[self._task_id] = str(self._overlay_dir)
+                _save_snapshots(snapshots)
