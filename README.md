@@ -12,14 +12,22 @@ Personal monorepo ของแอปที่รันบน [Modal](https://mod
 
 | โครงสร้าง | ทำอะไร |
 | --- | --- |
-| `modal_apps/modal_app` | Unified agent app + subagents |
-| `modal-images` | Build image กลาง + `bl1nk-search` |
+| `modal-apps/bl1nk-app` | Unified agent app + subagents |
+| `modal-apps/bl1nk-search` | Search service (FastAPI + embedding + reranker) |
+| `modal-images` | Base image builds (`bl1nk-agent`, `bl1nk-rust`, `bl1nk-search`) |
 | `conductor` | บริบทของโปรเจกต์ |
 
 ## เริ่มต้นใช้งาน
 
-ใช้ `uv sync` ใน `modal-apps/modal-app` ได้เลย
-ดูรายละเอียดคำสั่ง build/test/deploy ทั้งหมดได้ที่ [`CLAUDE.md`](./CLAUDE.md)
+```bash
+# bl1nk-app
+cd modal-apps/bl1nk-app && uv sync
+
+# bl1nk-search (separate)
+cd modal-apps/bl1nk-search && uv sync
+```
+
+ดูรายละเอียดคำสั่ง build/test/deploy ทั้งหมดได้ที่ [`QWEN.md`](./QWEN.md)
 
 บนเครื่อง Windows:
 ```powershell
@@ -28,6 +36,6 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
 
 ## อยากรู้เพิ่ม
 
-- [`CLAUDE.md`](./CLAUDE.md)
+- [`QWEN.md`](./QWEN.md)
 - [`conductor/index.md`](./conductor/index.md)
-- [`BL1NK_SEARCH_V1_SPEC.md`](./BL1NK_SEARCH_V1_SPEC.md)
+- [`BL1NK_SEARCH_V1_SPEC.md`](./docs/BL1NK_SEARCH_V1_SPEC.md)
