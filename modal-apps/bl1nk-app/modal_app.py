@@ -229,8 +229,9 @@ class SandboxManager:
         try:
             output, exit_code = self._worker.run_coroutine(_exec(), timeout=timeout + 30)
             return {"output": output, "exit_code": exit_code}
-        except Exception as e:
-            return {"error": str(e), "exit_code": 1}
+        except Exception:
+            logger.exception("exec failed for sandbox %s", task_id)
+            return {"error": "Command execution failed", "exit_code": 1}
 
     def list_sandboxes(self) -> list[dict]:
         now = time.time()
