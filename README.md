@@ -1,18 +1,18 @@
 # bl1nk-modal
 
-Personal monorepo ของแอปที่รันบน [Modal](https://modal.com) เพื่อเป็นโครงสร้างพื้นฐานให้ AI coding agent — sandbox กลาง, webhook task tracker, ระบบ search และ engine ติดป้าย PR/issue อัตโนมัติ
+Personal monorepo สำหรับแอปที่รันบน [Modal](https://modal.com) เพื่อเป็นโครงสร้างพื้นฐานให้ AI coding agent — unified agent gateway, sandbox runner, ระบบ vector search และ Rust engine สำหรับติดป้าย PR/issue อัตโนมัติ
 
 ## เอาไปใช้ตั้งค่า GitHub "About"
 
-**Description:** `Monorepo แอปส่วนตัวที่รันบน Modal สำหรับเป็นโครงสร้างพื้นฐานของ AI coding agent — webhook task tracker, sandbox orchestrator, ระบบ search แบบ embedding/rerank และ Rust engine สำหรับติดป้าย PR/issue อัตโนมัติ`
+**Description:** `Monorepo แอปส่วนตัวที่รันบน Modal สำหรับเป็นโครงสร้างพื้นฐานของ AI coding agent — unified agent gateway (strategy pattern dispatch), ระบบ search แบบ embedding/rerank และ Rust engine สำหรับติดป้าย PR/issue อัตโนมัติ`
 
-**Topics:** `modal, serverless, python, rust, fastapi, ai-agents, agent-infrastructure, sandbox, webhook-service, vector-search, embeddings, pyo3, monorepo, claude-code, devtools`
+**Topics:** `modal, serverless, python, rust, fastapi, ai-agents, agent-infrastructure, sandbox, vector-search, embeddings, pyo3, monorepo, claude-code, devtools`
 
 ## มีอะไรอยู่ในนี้บ้าง
 
 | โครงสร้าง | ทำอะไร |
 | --- | --- |
-| `modal-apps/bl1nk-app` | Unified agent app + subagents |
+| `modal-apps/bl1nk-app` | Unified agent gateway + subagents (strategy dispatch) |
 | `modal-apps/bl1nk-search` | Search service (FastAPI + embedding + reranker) |
 | `modal-images` | Base image builds (`bl1nk-agent`, `bl1nk-rust`, `bl1nk-search`) |
 | `conductor` | บริบทของโปรเจกต์ |

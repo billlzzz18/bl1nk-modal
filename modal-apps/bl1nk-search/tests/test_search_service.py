@@ -1,3 +1,4 @@
+import hashlib
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -103,7 +104,7 @@ def test_index_then_query_roundtrip(monkeypatch):
     assert ids == {"doc-1", "doc-2"}
 
 
-def test_delete_removes_metadata():
+def test_delete_soft_keeps_metadata():
     search_service._metadata["doc-1"] = {"content": "x"}
     search_service._ids.append("doc-1")
 
@@ -111,8 +112,22 @@ def test_delete_removes_metadata():
 
     assert resp.status_code == 200
     assert resp.json()["success"] is True
-    assert "doc-1" not in search_service._metadata
-    assert "doc-1" not in search_service._ids
+    # Soft delete: metadata kept, id kept, but marked deleted
+    assert "doc-1" in search_service._metadata
+    assert "doc-1" in search_service._ids
+    assert "doc-1" in search_service._deleted_ids
+
+
+def test_delete_hard_removes_metadata():
+    search_service._metadata["doc-2"] = {"content": "y"}
+    search_service._ids.append("doc-2")
+
+    resp = client.post("/delete", json={"id": "doc-2", "hard": True})
+
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert "doc-2" not in search_service._metadata
+    assert "doc-2" in search_service._deleted_ids
 
 
 def test_update_returns_not_found_for_unknown_id():
@@ -123,12 +138,16 @@ def test_update_returns_not_found_for_unknown_id():
 
 
 def test_update_modifies_existing_content():
-    search_service._metadata["doc-1"] = {"content": "old", "source_type": "doc"}
+    content_hash = hashlib.sha256(b"old").hexdigest()[:16]
+    search_service._metadata["doc-1"] = {"hash": content_hash, "source_type": "doc"}
+    search_service._write_content(content_hash, "old")
 
     resp = client.post("/update", json={"id": "doc-1", "source_type": "doc", "content": "new"})
 
     assert resp.json()["success"] is True
-    assert search_service._metadata["doc-1"]["content"] == "new"
+    # Content now stored in tmp, not _metadata
+    stored = search_service._read_content(content_hash)
+    assert stored == "new"
 
 
 def test_shutdown_resets_global_state(monkeypatch):

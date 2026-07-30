@@ -1,31 +1,32 @@
-# Required Dependencies
+# Setup
 
-## Base Images
+## Base Image
 
-### bl1nk-rust:latest
-This image must be built locally before deploying modal-sandbox. It includes:
-- Rust toolchain
-- Node.js
-- GitHub CLI
-- Claude CLI
+`bl1nk-rust:latest` ต้อง build ก่อน deploy app:
 
-**Build command:**
 ```bash
-cd /data/data/com.termux/files/home/modal/modal-images
+cd modal-images
 modal run build_bl1nk_rust.py
 ```
 
-## Secrets
+Image นี้ประกอบด้วย: Rust toolchain, Node.js, GitHub CLI, Claude CLI, Bun
 
-### GitHub PAT
-Create a Modal secret for GitHub operations:
+## Deploy
+
 ```bash
-modal secret new github-pat --value=<your-token>
+cd modal-apps/bl1nk-app
+modal deploy modal_app.py --name bl1nk
 ```
 
-## Verification
+## Local serve
 
 ```bash
-cd /data/data/com.termux/files/home/modal/modal-apps/modal-sandbox
-modal deploy modal_app.py --name modal-sandbox-v2.1
+modal serve modal_app.py
+```
+
+## Run tests
+
+```bash
+cd modal-apps/bl1nk-app
+uv run pytest tests/ -v
 ```

@@ -46,8 +46,39 @@ image = (
         "protobuf>=4.25",
         "faiss-cpu>=1.7",
         "numpy>=1.24",
+        "httpx>=0.27",
+        "optimum[onnxruntime]>=1.20",
+        "asyncpg>=0.29",
     )
-    .add_local_file("../modal-apps/bl1nk-search/search_service.py", "/home/workspace/search_service.py", copy=True)
+    .add_local_file("search_service.py", "/home/workspace/search_service.py", copy=True)
+    # ── Pre-download ALL registered models + export to ONNX ─
+    # ONNX runs 2-3x faster than raw PyTorch for embedding inference.
+    .run_commands(
+        "python3 -c \""
+        "from transformers import AutoTokenizer, AutoModel; "
+        # Embed models — download + export to ONNX
+        "for m in ["
+        "'sentence-transformers/all-MiniLM-L6-v2',"
+        "'BAAI/bge-small-en-v1.5',"
+        "'BAAI/bge-base-en-v1.5',"
+        "]: "
+        "AutoTokenizer.from_pretrained(m); "
+        "AutoModel.from_pretrained(m); "
+        # Qwen (HF only — ONNX export not supported for custom code)
+        "AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-0.6B', trust_remote_code=True); "
+        "AutoModel.from_pretrained('Qwen/Qwen3-Embedding-0.6B', trust_remote_code=True); "
+        # Reranker models
+        "for m in ["
+        "'BAAI/bge-reranker-v2-m3',"
+        "'BAAI/bge-reranker-v2-minicpm',"
+        "]: AutoTokenizer.from_pretrained(m); AutoModel.from_pretrained(m); "
+        "print('All models cached OK')\"",
+        # Export supported models to ONNX for faster inference
+        "optimum-cli export onnx --model sentence-transformers/all-MiniLM-L6-v2 /root/.onnx/minilm 2>/dev/null || true",
+        "optimum-cli export onnx --model BAAI/bge-small-en-v1.5 /root/.onnx/bge-small-en 2>/dev/null || true",
+        "optimum-cli export onnx --model BAAI/bge-base-en-v1.5 /root/.onnx/bge-base-en 2>/dev/null || true",
+        "echo 'ONNX export complete'",
+    )
 )
 
 with modal.enable_output():
