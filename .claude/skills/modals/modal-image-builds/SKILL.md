@@ -27,10 +27,13 @@ description: >-
 
 ## Workspace User Layout
 
+Rust toolchain is moved from `/root/.cargo` to `/home/workspace/.cargo` during build
+(and chowned to `workspace`), so the runtime user can `cargo install`, `cargo build`, etc.
+
 ```
 /home/workspace
 ├── .cache/
-├── .cargo/
+├── .cargo/         # moved from /root during build, workspace-owned
 ├── .claude/
 ├── .config/
 ├── .local/

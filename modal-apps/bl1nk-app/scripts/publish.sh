@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
-echo "== Modal Sandbox v2.1 Publish =="
+echo "== Deploy bl1nk-app =="
 
-ruff check .
+cd "$(dirname "$0")/.."
 
-pytest
+echo "Linting..."
+uv run ruff check .
 
-echo "Deploying modal-sandbox-v2.1..."
-modal deploy modal_app.py --name modal-sandbox-v2.1
+echo "Testing..."
+uv run pytest
+
+echo "Deploying bl1nk..."
+uv run modal deploy modal_app.py --name bl1nk
 
 echo
-echo "Publish completed."
+echo "Deploy completed."

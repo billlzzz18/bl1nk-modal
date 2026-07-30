@@ -18,12 +18,11 @@ fi
 
 echo
 echo "Checking Image..."
-
-modal image list | grep -E "modal-sandbox|v2\.1"
+modal image list | grep -E "bl1nk-agent|bl1nk-rust"
 
 echo
-echo "Checking modal-sandbox-v2.1 deployment..."
-modal app list | grep modal-sandbox || echo "App not deployed yet"
+echo "Checking bl1nk deployment..."
+modal app list | grep bl1nk || echo "App not deployed yet"
 
 echo
 echo "OK"

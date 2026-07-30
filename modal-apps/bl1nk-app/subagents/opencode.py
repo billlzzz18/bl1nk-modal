@@ -1,4 +1,3 @@
-import os
 from modal import Image, App
 
 image = (

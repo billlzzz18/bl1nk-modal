@@ -1,16 +1,26 @@
 [project]
-name = "image-builds"
+name = "bl1nk-search"
 version = "1.0.0"
-description = "Modal image builds for Rust development environment"
+description = "Embedding + reranker search service on Modal"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "modal>=0.70.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "pydantic>=2.0",
+    "transformers>=4.40",
+    "torch>=2.2",
+    "sentencepiece>=0.2",
+    "protobuf>=4.25",
+    "faiss-cpu>=1.7",
+    "numpy>=1.24",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "httpx>=0.28.1",
     "ruff>=0.12.2",
 ]
 
@@ -23,4 +33,4 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["build_bl1nk_rust", "build_bl1nk_search", "_tags"]
+py-modules = ["search_service"]

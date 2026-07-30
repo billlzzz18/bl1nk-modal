@@ -64,7 +64,7 @@ Directory tree expected at runtime:
 ```
 /home/workspace
 ├── .cache/
-├── .cargo/         # symlinked from /root/.cargo during build
+├── .cargo/         # moved from /root/.cargo during build (workspace-owned)
 ├── .claude/
 ├── .config/
 ├── .local/bin/
@@ -134,8 +134,9 @@ terminal(command, background=True, notify_on_complete=True, timeout=7200)
 
 ## 10. Rust Image Specifics
 
-- Symlink cargo and bun into `/usr/local/bin/` so runtime user inherits them.
-- Keep `rustup` default toolchain install under root; runtime user reads via PATH or symlinks.
+- Move Rust toolchain from `/root/.cargo` and `/root/.rustup` to `/home/workspace/` during build, then `chown workspace:workspace`.
+- Symlink `cargo`, `rustup`, `rustc` and `bun` into `/usr/local/bin/` so runtime user inherits them even if PATH is misconfigured.
+- Set `RUSTUP_HOME=/home/workspace/.rustup` and `CARGO_HOME=/home/workspace/.cargo` in image env so the workspace user can `cargo install`, `cargo build`, etc.
 
 ## 11. Service Image Pattern (STRICT SEPARATION)
 

@@ -19,7 +19,7 @@ future similar multimodal search services on Modal.
 - Node.js 22 + npm (NodeSource)
 - Bun
 - GitHub CLI (`gh`)
-- Claude CLI (`/root/.local/bin/claude`)
+- Claude CLI (installed at `/root/.local/bin/claude` during build, symlinked to `/usr/local/bin/claude` for runtime)
 - Python deps: fastapi, uvicorn, pydantic, transformers, torch, sentencepiece,
   protobuf, faiss-cpu, numpy
 

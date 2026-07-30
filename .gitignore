@@ -15,4 +15,8 @@ dist/
 build/
 *.log
 
+*:Zone.Identifier
+.mimocode/
+.qwen/tmp/
+
 # subrepos/folders
