@@ -1,22 +1,41 @@
+```
+# Dependencies
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
 .venv/
-*.egg-info/
 .env
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.swo
-node_modules/
-target/
-dist/
+.env.local
+.env.*
+.envrc
+
+# Build artifacts
 build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Modal specific
+.modal/
+__modal/
+
+# Logs
 *.log
 
-*:Zone.Identifier
-.mimocode/
-.qwen/tmp/
+# OS generated files
+.DS_Store
+Thumbs.db
 
-# subrepos/folders
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+```
